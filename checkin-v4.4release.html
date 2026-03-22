@@ -26541,9 +26541,9 @@ if (textarea) {
 
             // 3. 判断勾选情况
             if (selectedUsers.length > 1) {
-                openEditPanel('batch', selectedUsers);
+                EditPanel('batch', selectedUsers);
             } else if (selectedUsers.length === 1) {
-                openEditPanel('single', selectedUsers);
+                EditPanel('single', selectedUsers);
             } else {
                 alert("⚠️ 请先在列表中勾选需要操作的用户！");
             }
@@ -26551,7 +26551,7 @@ if (textarea) {
     }
 
     // 触发面板函数
-    function openEditPanel(mode, users) {
+    function EditPanel(mode, users) {
         console.log("即将打开【编辑面板】", mode, users);
         
         // 【关键】在这里写你原本那个面板弹出来的 JS 代码
