@@ -7396,57 +7396,6 @@
             background-color: rgba(255, 255, 255, 0.1);
             color: #fff;
         }
-        /* 多选下拉框样式 */
-.multiselect-container { position: relative; }
-.multiselect-input { 
-    padding: 5px 12px !important; 
-    cursor: pointer; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center;
-}
-.multiselect-dropdown { 
-    position: absolute; 
-    top: 100%; 
-    left: 0; 
-    right: 0; 
-    background: white; 
-    border: 1px solid rgb(203, 213, 225); 
-    border-radius: 6px; 
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
-    z-index: 1000;
-    max-width: 300px;
-}
-.multiselect-search { 
-    width: 100%; 
-    padding: 8px 12px; 
-    border: none; 
-    border-bottom: 1px solid rgb(226, 232, 240); 
-    outline: none; 
-    font-size: 14px;
-    box-sizing: border-box;
-}
-.multiselect-list { 
-    max-height: 250px; 
-    overflow-y: auto; 
-    padding: 8px 0;
-}
-.multiselect-item { 
-    display: flex; 
-    align-items: center; 
-    gap: 8px; 
-    padding: 8px 12px; 
-    cursor: pointer; 
-    hover: background-color: rgb(239, 246, 255);
-}
-.multiselect-item:hover { 
-    background-color: rgb(239, 246, 255); 
-}
-.multiselect-item input[type="checkbox"] { 
-    cursor: pointer; 
-    width: 16px; 
-    height: 16px;
-}
     </style>
 
 </head>
@@ -22027,67 +21976,99 @@
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
-					// 1. 修改核心触发器
-					advanced_edit_handler() {
-					const selectedUsers = Array.from(this.selected_user_ids || []);
-					if (selectedUsers.length > 1) {
-					// 批量模式：传数组
-					this.openUserEditor('batch', selectedUsers);
-					} else if (selectedUsers.length === 1) {
-					// 单人模式：传单个 ID (注意这里加了)
-					this.openUserEditor('single', selectedUsers);
-					} else {
-					alert("⚠️ 请先勾选需要编辑的用户！");
-					}
-					}
+					// 1. 核心触发器
+advanced_edit_handler() {
+    const selectedUsers = Array.from(this.selected_user_ids || []);
+    if (selectedUsers.length > 1) {
+        // 批量模式：传整个数组
+        this.openUserEditor('batch', selectedUsers);
+    } else if (selectedUsers.length === 1) {
+        // 单人模式：传单个 ID (注意这里加上了，只传字符串更稳定)
+        this.openUserEditor('single', selectedUsers);
+    } else {
+        alert("⚠️ 请先勾选需要编辑的用户！");
+    }
+}
 
-					// 2. 面板显示函数
-					openUserEditor(mode, usersData) {
-					const modal = document.getElementById('userEditModal');
-					if (!modal) return;
+// 2. 【全新新增】：渲染搜索下拉框数据
+renderDropdownData() {
+    // 模拟的系统数据（实际中可以是后端传来的）
+    const allGroups = ['开发组', '前端组', '后端组', '测试组', '运维组', '产品组'];
+    const allUsers = ['admin', 'user_01', 'user_02', 'ZhangSan', 'LiSi', 'WangWu'];
+
+    const generateHtml = (items) => items.map(item => `
+        <label class="search-select-item">
+            <input type="checkbox" value="${item}">
+            <span>${item}</span>
+        </label>
+    `).join('');
+
+    // 将生成的带 ☑ 的列表塞进 HTML 结构里
+    const dt = document.getElementById('dropdown-teams');
+    if(dt) dt.innerHTML = generateHtml(allGroups);
     
-					modal.classList.add('active');
-					const titleText = document.getElementById('editor-title-text');
-					const rightTitle = document.getElementById('editor-right-title');
-					const viewSingle = document.getElementById('view-single-user');
-					const viewBatch = document.getElementById('view-batch-users');
-					const groups = ['status', 'storage', 'teams', 'comms', 'extra'];
-					if (mode === 'single') {
-					titleText.innerText = '[ 编辑 ]';
-					rightTitle.innerText = '👤 当前编辑的用户';
-					viewSingle.style.display = 'block';
-					viewBatch.style.display = 'none';
-					document.getElementById('single-username').innerText = "用户 ID: " + usersData;
-        
-					// 循环设置组状态
-					groups.forEach(g => this.setGroupState(g, true));
-					} else if (mode === 'batch') {
-					titleText.innerText = '[ 批量编辑 ]';
-					rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
-					viewSingle.style.display = 'none';
-					viewBatch.style.display = 'flex';
-					viewBatch.innerHTML = ''; 
-					usersData.forEach(user => {
-					const userDiv = document.createElement('div');
-					userDiv.className = 'batch-user-item';
-					userDiv.innerText = "用户 ID: " + user;
-					viewBatch.appendChild(userDiv);
-					});
-        
+    const dcg = document.getElementById('dropdown-comm-groups');
+    if(dcg) dcg.innerHTML = generateHtml(allGroups);
+    
+    const dcu = document.getElementById('dropdown-comm-users');
+    if(dcu) dcu.innerHTML = generateHtml(allUsers);
+}
+
+// 3. 面板显示函数 (升级版)
+openUserEditor(mode, usersData) {
+    const modal = document.getElementById('userEditModal');
+    if (!modal) return;    
+    
+    // 打开面板前，先把下拉框的数据准备好
+    this.renderDropdownData();
+    
+    modal.classList.add('active');
+    const titleText = document.getElementById('editor-title-text');
+    const rightTitle = document.getElementById('editor-right-title');
+    const viewSingle = document.getElementById('view-single-user');
+    const viewBatch = document.getElementById('view-batch-users');
+    const groups = ['status', 'storage', 'teams', 'comms', 'extra'];
+
+    if (mode === 'single') {
+        titleText.innerText = '[ 编辑 ]';
+        rightTitle.innerText = '👤 当前编辑的用户';
+        viewSingle.style.display = 'block';
+        viewBatch.style.display = 'none';
+        document.getElementById('single-username').innerText = "用户 ID: " + usersData;        
+        // 循环设置组状态
+        groups.forEach(g => this.setGroupState(g, true));
+    } else if (mode === 'batch') {
+        titleText.innerText = '[ 批量编辑 ]';
+        rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
+        viewSingle.style.display = 'none';
+        viewBatch.style.display = 'flex';
+        viewBatch.innerHTML = ''; 
+        usersData.forEach(user => {
+            const userDiv = document.createElement('div');
+            userDiv.className = 'batch-user-item';
+            userDiv.innerText = "用户 ID: " + user;
+            viewBatch.appendChild(userDiv);
+        });
         groups.forEach(g => this.setGroupState(g, true));
         this.setGroupState('status', false); // 批量时默认关闭状态修改
     }
 }
-// 【保存逻辑】：收集数据并准备发送
+
+// 4. 【终极版保存逻辑】：收集所有数据并准备发送
 saveAllChanges() {
-    // 1. 获取选中的用户 ID 列表
     const userIds = Array.from(this.selected_user_ids || []);
     if (userIds.length === 0) return;
 
-    // 2. 准备一个对象来存“要修改的内容”
+    // 准备一个对象来存“要修改的内容”
     const updateData = {
         ids: userIds,
         configs: {}
+    };
+
+    // 辅助工具：获取某个下拉框里所有被打钩的值
+    const getCheckedValues = (dropdownId) => {
+        const checkboxes = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]:checked`);
+        return Array.from(checkboxes).map(cb => cb.value);
     };
 
     // --- 状态修改 ---
@@ -22097,15 +22078,27 @@ saveAllChanges() {
 
     // --- 存储空间 ---
     if (document.getElementById('chk-storage').checked) {
-        updateData.configs.storage_limit = document.querySelector('#content-storage .form-input').value;
+        // 使用 parseInt 确保拿到的是纯数字
+        updateData.configs.storage_limit = parseInt(document.querySelector('#content-storage .form-input').value, 10);
     }
 
-    // --- 附加权限（这里是修正后的逻辑） ---
+    // --- 所属组管理 (获取多选结果) ---
+    if (document.getElementById('chk-teams').checked) {
+        updateData.configs.join_groups = getCheckedValues('dropdown-teams');
+    }
+
+    // --- 通信权限设置 (获取多选结果) ---
+    if (document.getElementById('chk-comms').checked) {
+        updateData.configs.communication = {
+            allow_all: document.querySelector('#content-comms .form-select').value,
+            allowed_groups: getCheckedValues('dropdown-comm-groups'),
+            allowed_users: getCheckedValues('dropdown-comm-users')
+        };
+    }
+
+    // --- 附加权限（已彻底修复 Bug 的版本） ---
     if (document.getElementById('chk-extra').checked) {
-        // 抓取该区域下所有的复选框
         const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        
-        // 按照你 HTML 里的顺序（0:网盘, 1:好友, 2:群组, 3:邀请）分别取值
         updateData.configs.permissions = {
             manage_drive: extraCheckboxes.checked, 
             add_friends: extraCheckboxes.checked,
@@ -22114,293 +22107,28 @@ saveAllChanges() {
         };
     }
 
-    // 4. 打印结果
+    // 打印结果看看
     console.log("准备发送给后端的数据包：", updateData);
-
-    // 5. 提示并关闭
-    alert(`成功！已为 ${userIds.length} 个用户提交了修改。`);
+    alert(`成功！已为 ${userIds.length} 个用户提交了修改。打开 F12 控制台查看数据包！`);
     this.closeUserEditor(); 
 }
-// 3. 辅助方法
+
+// 5. 辅助方法
 setGroupState(groupId, state) {
     const chk = document.getElementById('chk-' + groupId);
     if (chk) {
         chk.checked = state;
-        // 只要 toggleGroupState 在全局作用域，这里就能直接调
         if (typeof toggleGroupState === 'function') {
             toggleGroupState(groupId);
         }
     }
 }
 
-// 4. 关闭方法
+// 6. 关闭方法
 closeUserEditor() {
     const modal = document.getElementById('userEditModal');
     if (modal) modal.classList.remove('active');
 }
-// 模拟数据
-const mockGroups = [
-    { id: 1, name: 'group_dev', label: '开发组' },
-    { id: 2, name: 'group_frontend', label: '前端组' },
-    { id: 3, name: 'group_backend', label: '后端组' },
-    { id: 4, name: 'group_admin', label: '管理员组' },
-    { id: 5, name: 'group_test', label: '测试组' },
-    { id: 6, name: 'group_design', label: '设计组' },
-];
-
-const allUsers = [
-    { id: 1, name: 'user_test_01' },
-    { id: 2, name: 'user_admin_01' },
-    { id: 3, name: 'user_dev_02' },
-    { id: 4, name: 'user_frontend_03' },
-    { id: 5, name: 'user_backend_04' },
-];
-
-// 存储选中的数据
-let selectedGroups = [];
-let selectedCommGroups = [];
-let selectedCommUsers = [];
-
-// 初始化所有多选框
-function initializeMultiselects() {
-    renderGroupSelect();
-    renderCommGroupSelect();
-    renderCommUserSelect();
-}
-
-// 切换下拉框显示
-function toggleDropdown(event, dropdownId) {
-    event.stopPropagation();
-    const dropdown = document.getElementById(dropdownId);
-    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-    
-    // 关闭其他下拉框
-    document.querySelectorAll('.multiselect-dropdown').forEach(el => {
-        if (el.id !== dropdownId) {
-            el.style.display = 'none';
-        }
-    });
-}
-
-// 点击页面其他地方关闭下拉框
-document.addEventListener('click', function(event) {
-    if (!event.target.closest('.multiselect-container')) {
-        document.querySelectorAll('.multiselect-dropdown').forEach(el => {
-            el.style.display = 'none';
-        });
-    }
-});
-
-// ==================== 【所属组管理】相关函数 ====================
-
-// 渲染所属组选择器
-function renderGroupSelect() {
-    const list = document.getElementById('groupList');
-    list.innerHTML = mockGroups.map(group => `
-        <div class="multiselect-item">
-            <input type="checkbox" id="group_${group.id}" 
-                   ${selectedGroups.some(g => g.id === group.id) ? 'checked' : ''} 
-                   onchange="updateGroupSelection(${group.id}, '${group.name}', '${group.label}')">
-            <label for="group_${group.id}" style="cursor: pointer; flex: 1;">
-                <span style="color: #0f172a; font-weight: 500;">${group.name}</span>
-                <span style="color: #64748b; font-size: 12px;"> - ${group.label}</span>
-            </label>
-        </div>
-    `).join('');
-}
-
-// 更新组选择
-function updateGroupSelection(id, name, label) {
-    const index = selectedGroups.findIndex(g => g.id === id);
-    if (index > -1) {
-        selectedGroups.splice(index, 1);
-    } else {
-        selectedGroups.push({ id, name, label });
-    }
-    updateGroupDisplay();
-}
-
-// 更新所属组显示
-function updateGroupDisplay() {
-    const display = document.getElementById('groupSelectDisplay');
-    if (selectedGroups.length === 0) {
-        display.textContent = '请选择组';
-    } else {
-        display.textContent = selectedGroups.map(g => g.name).join(', ');
-    }
-}
-
-// 搜索组
-function filterGroups(value) {
-    const list = document.getElementById('groupList');
-    const filtered = mockGroups.filter(g => 
-        g.name.toLowerCase().includes(value.toLowerCase()) || 
-        g.label.toLowerCase().includes(value.toLowerCase())
-    );
-    list.innerHTML = filtered.map(group => `
-        <div class="multiselect-item">
-            <input type="checkbox" id="group_${group.id}" 
-                   ${selectedGroups.some(g => g.id === group.id) ? 'checked' : ''} 
-                   onchange="updateGroupSelection(${group.id}, '${group.name}', '${group.label}')">
-            <label for="group_${group.id}" style="cursor: pointer; flex: 1;">
-                <span style="color: #0f172a; font-weight: 500;">${group.name}</span>
-                <span style="color: #64748b; font-size: 12px;"> - ${group.label}</span>
-            </label>
-        </div>
-    `).join('');
-}
-
-// 添加选中的组
-function addSelectedGroups() {
-    if (selectedGroups.length === 0) {
-        alert('请选择至少一个组');
-        return;
-    }
-    console.log('添加的组:', selectedGroups);
-    // 这里可以发送到服务器或执行其他操作
-    alert('已添加 ' + selectedGroups.length + ' 个组');
-}
-
-// ==================== 【通信权限-组】相关函数 ====================
-
-// 渲染通信权限组选择器
-function renderCommGroupSelect() {
-    const list = document.getElementById('commGroupList');
-    list.innerHTML = mockGroups.map(group => `
-        <div class="multiselect-item">
-            <input type="checkbox" id="commGroup_${group.id}" 
-                   ${selectedCommGroups.some(g => g.id === group.id) ? 'checked' : ''} 
-                   onchange="updateCommGroupSelection(${group.id}, '${group.name}', '${group.label}')">
-            <label for="commGroup_${group.id}" style="cursor: pointer; flex: 1;">
-                <span style="color: #0f172a; font-weight: 500;">${group.name}</span>
-                <span style="color: #64748b; font-size: 12px;"> - ${group.label}</span>
-            </label>
-        </div>
-    `).join('');
-}
-
-// 更新通信组选择
-function updateCommGroupSelection(id, name, label) {
-    const index = selectedCommGroups.findIndex(g => g.id === id);
-    if (index > -1) {
-        selectedCommGroups.splice(index, 1);
-    } else {
-        selectedCommGroups.push({ id, name, label });
-    }
-    updateCommGroupDisplay();
-}
-
-// 更新通信组显示
-function updateCommGroupDisplay() {
-    const display = document.getElementById('commGroupDisplay');
-    if (selectedCommGroups.length === 0) {
-        display.textContent = '请选择组';
-    } else {
-        display.textContent = selectedCommGroups.map(g => g.name).join(', ');
-    }
-}
-
-// 搜索通信组
-function filterCommGroups(value) {
-    const list = document.getElementById('commGroupList');
-    const filtered = mockGroups.filter(g => 
-        g.name.toLowerCase().includes(value.toLowerCase()) || 
-        g.label.toLowerCase().includes(value.toLowerCase())
-    );
-    list.innerHTML = filtered.map(group => `
-        <div class="multiselect-item">
-            <input type="checkbox" id="commGroup_${group.id}" 
-                   ${selectedCommGroups.some(g => g.id === group.id) ? 'checked' : ''} 
-                   onchange="updateCommGroupSelection(${group.id}, '${group.name}', '${group.label}')">
-            <label for="commGroup_${group.id}" style="cursor: pointer; flex: 1;">
-                <span style="color: #0f172a; font-weight: 500;">${group.name}</span>
-                <span style="color: #64748b; font-size: 12px;"> - ${group.label}</span>
-            </label>
-        </div>
-    `).join('');
-}
-
-// 添加通信组
-function addCommGroups() {
-    if (selectedCommGroups.length === 0) {
-        alert('请选择至少一个组');
-        return;
-    }
-    console.log('允许通信的组:', selectedCommGroups);
-    alert('已添加 ' + selectedCommGroups.length + ' 个组');
-}
-
-// ==================== 【通信权限-用户】相关函数 ====================
-
-// 渲染通信权限用户选择器
-function renderCommUserSelect() {
-    const list = document.getElementById('commUserList');
-    list.innerHTML = allUsers.map(user => `
-        <div class="multiselect-item">
-            <input type="checkbox" id="commUser_${user.id}" 
-                   ${selectedCommUsers.some(u => u.id === user.id) ? 'checked' : ''} 
-                   onchange="updateCommUserSelection(${user.id}, '${user.name}')">
-            <label for="commUser_${user.id}" style="cursor: pointer; flex: 1;">
-                <span style="color: #0f172a; font-weight: 500;">${user.name}</span>
-            </label>
-        </div>
-    `).join('');
-}
-
-// 更新通信用户选择
-function updateCommUserSelection(id, name) {
-    const index = selectedCommUsers.findIndex(u => u.id === id);
-    if (index > -1) {
-        selectedCommUsers.splice(index, 1);
-    } else {
-        selectedCommUsers.push({ id, name });
-    }
-    updateCommUserDisplay();
-}
-
-// 更新通信用户显示
-function updateCommUserDisplay() {
-    const display = document.getElementById('commUserDisplay');
-    if (selectedCommUsers.length === 0) {
-        display.textContent = '请选择用户';
-    } else {
-        display.textContent = selectedCommUsers.map(u => u.name).join(', ');
-    }
-}
-
-// 搜索通信用户
-function filterCommUsers(value) {
-    const list = document.getElementById('commUserList');
-    const filtered = allUsers.filter(u => 
-        u.name.toLowerCase().includes(value.toLowerCase())
-    );
-    list.innerHTML = filtered.map(user => `
-        <div class="multiselect-item">
-            <input type="checkbox" id="commUser_${user.id}" 
-                   ${selectedCommUsers.some(u => u.id === user.id) ? 'checked' : ''} 
-                   onchange="updateCommUserSelection(${user.id}, '${user.name}')">
-            <label for="commUser_${user.id}" style="cursor: pointer; flex: 1;">
-                <span style="color: #0f172a; font-weight: 500;">${user.name}</span>
-            </label>
-        </div>
-    `).join('');
-}
-
-// 添加通信用户
-function addCommUsers() {
-    if (selectedCommUsers.length === 0) {
-        alert('请选择至少一个用户');
-        return;
-    }
-    console.log('允许通信的用户:', selectedCommUsers);
-    alert('已添加 ' + selectedCommUsers.length + ' 个用户');
-}
-
-// 初始化
-document.addEventListener('DOMContentLoaded', function() {
-    initializeUserList(); // 原有用户选择器初始化
-    initializeMultiselects(); // 新增多选框初始化
-});
                 // 更新删除按钮状态
                 _update_delete_button() {
                     if (this.selected_user_ids.size > 0) {
@@ -26817,6 +26545,63 @@ if (textarea) {
     .info-section-title { font-size: 15px; font-weight: 600; color: #64748b; margin: 16px 0 10px 0; }
     .batch-user-item { font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding: 12px 4px; }
     .batch-user-item:last-child { border-bottom: none; }
+/* 自定义搜索多选下拉框样式 */
+.search-select-container {
+    position: relative;
+    flex: 1; /* 让它在 flex 容器中撑开 */
+    max-width: 200px;
+}
+
+.search-select-input {
+    width: 100%;
+    padding: 6px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.search-select-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+}
+
+.search-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-height: 180px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    z-index: 1000;
+    display: none; /* 默认隐藏 */
+    margin-top: 4px;
+}
+
+.search-select-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #334155;
+    transition: background 0.2s;
+}
+
+.search-select-item:hover {
+    background-color: #f1f5f9;
+}
+
+/* 隐藏被搜索过滤掉的选项 */
+.search-select-item.hidden {
+    display: none !important;
+}    
 </style>
 
 <div id="userEditModal" class="edit-modal-overlay">
@@ -26850,36 +26635,26 @@ if (textarea) {
             <input type="checkbox" id="chk-storage" onchange="toggleGroupState('storage')"> 
             <span>存储空间配置<sup class="tooltip-icon" title="设置用户可使用的存储空间上限">ⓘ</sup></span>
         </div>
-        <div class="edit-controls" id="content-storage">
+       <div class="edit-controls" id="content-storage">
             <input type="number" class="form-input" value="1024" style="width: 100px;">
             <span style="color: #475569; font-size: 15px;">MB</span>
         </div>
-    </div>
-
-    <div class="edit-group">
-    <div class="edit-group-title">
-        <input type="checkbox" checked> 
-        <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后添加">ⓘ</sup></span>
-    </div>
-    <div class="content-box" style="margin-top: 0;">
-        <div class="edit-controls">
-            <div class="multiselect-container" id="groupSelectContainer">
-                <div class="form-input multiselect-input" onclick="toggleDropdown(event, 'groupSelect')">
-                    <span id="groupSelectDisplay" style="color: #0f172a; font-weight: 500;">请选择组</span>
-                    <span style="font-size: 12px; color: #64748b;">▼</span>
+    </div> <div class="edit-group" id="group-teams">
+        <div class="edit-group-title" id="title-teams">
+            <input type="checkbox" id="chk-teams" onchange="toggleGroupState('teams')"> 
+            <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后加入">ⓘ</sup></span>
+        </div>
+        <div class="content-box" style="margin-top: 0;" id="content-teams">
+            <div class="edit-controls">
+                <div class="search-select-container">
+                    <input type="text" class="search-select-input" placeholder="搜索组并勾选..." onfocus="showDropdown('dropdown-teams')" oninput="filterDropdown('dropdown-teams', this.value)">
+                    <div class="search-select-dropdown" id="dropdown-teams">
+                        </div>
                 </div>
-                <div class="multiselect-dropdown" id="groupSelect" style="display: none;">
-                    <input type="text" class="multiselect-search" placeholder="搜索组..." id="groupSearch" oninput="filterGroups(this.value)">
-                    <div class="multiselect-list" id="groupList">
-                        <!-- 组列表动态生成 -->
-                    </div>
-                </div>
+                <button class="btn-admin">加入</button>
             </div>
-            <button class="btn-admin" onclick="addSelectedGroups()">加入</button>
         </div>
     </div>
-</div>
-
 
     <div class="edit-group" id="group-comms">
         <div class="edit-group-title" id="title-comms">
@@ -26896,43 +26671,31 @@ if (textarea) {
                     </select>
                 </div>
             </div>
-<div style="display: flex; align-items: center;">
-    <span class="sub-label-normal" style="width: 205px;">允许主动与这些组通信<sup class="tooltip-icon" title="设定该用户只能与指定的组进行通信">ⓘ</sup>：</span>
-    <div class="edit-controls">
-        <div class="multiselect-container" id="commGroupContainer">
-            <div class="form-input multiselect-input" onclick="toggleDropdown(event, 'commGroupSelect')">
-                <span id="commGroupDisplay" style="color: #0f172a; font-weight: 500;">请选择组</span>
-                <span style="font-size: 12px; color: #64748b;">▼</span>
+            
+            <div style="display: flex; align-items: center;">
+                <span class="sub-label-normal">允许主动与这些组通信<sup class="tooltip-icon" title="设定该用户只能与指定的组进行通信">ⓘ</sup>：</span>
+                <div class="edit-controls">
+                    <div class="search-select-container">
+                        <input type="text" class="search-select-input" placeholder="搜索允许的组..." onfocus="showDropdown('dropdown-comm-groups')" oninput="filterDropdown('dropdown-comm-groups', this.value)">
+                        <div class="search-select-dropdown" id="dropdown-comm-groups"></div>
+                    </div>
+                    <button class="btn-admin">添加</button>
+                </div>
             </div>
-            <div class="multiselect-dropdown" id="commGroupSelect" style="display: none;">
-                <input type="text" class="multiselect-search" placeholder="搜索组..." id="commGroupSearch" oninput="filterCommGroups(this.value)">
-                <div class="multiselect-list" id="commGroupList">
-                    <!-- 组列表动态生成 -->
+            
+            <div style="display: flex; align-items: center;">
+                <span class="sub-label-normal">允许主动与这些用户通信<sup class="tooltip-icon" title="设定该用户只能与指定的用户进行通信">ⓘ</sup>：</span>
+                <div class="edit-controls">
+                    <div class="search-select-container">
+                        <input type="text" class="search-select-input" placeholder="搜索允许的用户..." onfocus="showDropdown('dropdown-comm-users')" oninput="filterDropdown('dropdown-comm-users', this.value)">
+                        <div class="search-select-dropdown" id="dropdown-comm-users"></div>
+                    </div>
+                    <button class="btn-admin">添加</button>
                 </div>
             </div>
         </div>
-        <button class="btn-admin" onclick="addCommGroups()">添加</button>
     </div>
-</div>
-            <!-- 放置位置3：允许主动与这些用户通信 - 第 152-161 行 替换 -->
-<div style="display: flex; align-items: center;">
-    <span class="sub-label-normal" style="width: 205px;">允许主动与这些用户通信<sup class="tooltip-icon" title="设定该用户只能与指定的用户进行通信">ⓘ</sup>：</span>
-    <div class="edit-controls">
-        <div class="multiselect-container" id="commUserContainer">
-            <div class="form-input multiselect-input" onclick="toggleDropdown(event, 'commUserSelect')">
-                <span id="commUserDisplay" style="color: #0f172a; font-weight: 500;">请选择用户</span>
-                <span style="font-size: 12px; color: #64748b;">▼</span>
-            </div>
-            <div class="multiselect-dropdown" id="commUserSelect" style="display: none;">
-                <input type="text" class="multiselect-search" placeholder="搜索用户..." id="commUserSearch" oninput="filterCommUsers(this.value)">
-                <div class="multiselect-list" id="commUserList">
-                    <!-- 用户列表动态生成 -->
-                </div>
-            </div>
-        </div>
-        <button class="btn-admin" onclick="addCommUsers()">添加</button>
-    </div>
-</div>
+
     <div class="edit-group" id="group-extra">
         <div class="edit-group-title" id="title-extra">
             <input type="checkbox" id="chk-extra" onchange="toggleGroupState('extra')"> 
@@ -27006,6 +26769,36 @@ if (textarea) {
     function closeUserEditor() {
         document.getElementById('userEditModal').classList.remove('active');
     }
+     // 1. 显示下拉菜单，并隐藏其他菜单
+    function showDropdown(dropdownId) {
+        document.querySelectorAll('.search-select-dropdown').forEach(el => el.style.display = 'none');
+        document.getElementById(dropdownId).style.display = 'block';
+    }
+
+    // 2. 搜索过滤功能
+    function filterDropdown(dropdownId, keyword) {
+        const list = document.getElementById(dropdownId);
+        if (!list) return;
+        
+        const items = list.querySelectorAll('.search-select-item');
+        const lowerKeyword = keyword.toLowerCase();
+
+        items.forEach(item => {
+            const text = item.innerText.toLowerCase();
+            if (text.includes(lowerKeyword)) {
+                item.classList.remove('hidden');
+            } else {
+                item.classList.add('hidden');
+            }
+        });
+    }
+
+    // 3. 点击页面空白处，自动收起所有下拉菜单
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.search-select-container')) {
+            document.querySelectorAll('.search-select-dropdown').forEach(el => el.style.display = 'none');
+        }
+    });
 </script>
 
 </body>
