@@ -21493,6 +21493,9 @@
                     this.e_btn_delete.addEventListener("click", (event) => {
                         this.batch_delete_users();
                     });
+                    this.e_btn_editPanel.addEventListener("click", (event) => {
+                    this.advanced_edit_handler(); 
+                    });
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
@@ -21970,9 +21973,11 @@
                     if (this.selected_user_ids.size > 0) {
                         this.e_btn_edit.disabled = false;
                         this.e_btn_delete.disabled = false;
+                        this.e_btn_editPanel.disabled = false;
                     } else {
                         this.e_btn_edit.disabled = true;
                         this.e_btn_delete.disabled = true;
+                        this.e_btn_editPanel.disabled = true;
                     }
                 }
 
