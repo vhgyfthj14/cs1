@@ -26348,6 +26348,216 @@ if (textarea) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
 
 <div id="chat-toast-container"></div>
+<style>
+    .edit-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); display: none; justify-content: center; align-items: center; z-index: 99999; }
+    .edit-modal-overlay.active { display: flex; animation: fadeInModal 0.2s ease-out; }
+    @keyframes fadeInModal { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+    .edit-panel-card { background: rgb(255, 255, 255); border: 2px solid rgb(147, 197, 253); border-radius: 12px; padding: 20px; box-shadow: rgba(0, 0, 0, 0.1) 0px 10px 15px -3px; width: 950px; max-width: 95vw; max-height: 90vh; overflow-y: auto; font-size: 15px; color: rgb(30, 53, 87); font-family: system-ui, -apple-system, sans-serif; }
+    .edit-panel-header { font-size: 15px; font-weight: 600; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 2px solid rgb(241, 245, 249); color: rgb(30, 64, 175); display: flex; justify-content: space-between; align-items: center; }
+    .btn-close-modal { background: none; border: none; font-size: 22px; cursor: pointer; color: #94a3b8; line-height: 1; padding: 0; }
+    .btn-close-modal:hover { color: #ef4444; }
+    .btn-admin { padding: 6px 15px; border-radius: 6px; border: 1px solid rgb(147, 197, 253); background: rgb(255, 255, 255); color: rgb(30, 53, 87); cursor: pointer; font-size: 15px; transition: 0.2s; display: flex; align-items: center; gap: 5px; height: 32px; box-sizing: border-box; }
+    .btn-admin:hover { background: rgb(239, 246, 255); border-color: rgb(59, 130, 246); }
+    .edit-group { margin-bottom: 10px; padding: 14px; background: rgb(248, 250, 252); border-radius: 8px; border: 1px solid rgb(226, 232, 240); }
+    .edit-group-title { font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: rgb(51, 65, 85); font-size: 15px; }
+    .edit-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .form-select, .form-input { padding: 5px 12px; border: 1px solid rgb(203, 213, 225); border-radius: 6px; outline: none; font-size: 15px; height: 32px; box-sizing: border-box; }
+    .form-input:focus, .form-select:focus { border-color: rgb(59, 130, 246); box-shadow: rgba(59, 130, 246, 0.1) 0px 0px 0px 2px; }
+    .panel-footer { margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px; padding-top: 15px; border-top: 1px solid rgb(226, 232, 240); }
+    .tooltip-icon { color: #60a5fa; cursor: help; font-size: 12px; margin-left: 2px; vertical-align: super; }
+    .content-box { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+    .sub-label-normal { font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); display: block; width: 205px; } 
+    .fake-multiselect { height: 32px; background-color: #fff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; width: 140px; }
+    .dimmed-text { color: #94a3b8 !important; }
+    .dimmed-content { opacity: 0.45; pointer-events: none; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 15px; }
+    .info-label { color: #475569; }
+    .info-value { color: #0f172a; font-weight: 500; }
+    .status-on { color: #10b981; font-weight: 500; } 
+    .status-off { color: #94a3b8; font-weight: 400; } 
+    .info-section-title { font-size: 15px; font-weight: 600; color: #64748b; margin: 16px 0 10px 0; }
+    .batch-user-item { font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding: 12px 4px; }
+    .batch-user-item:last-child { border-bottom: none; }
+</style>
+
+<div id="userEditModal" class="edit-modal-overlay">
+    <div class="edit-panel-card">
+        <div class="edit-panel-header">
+            <div>
+                <span id="editor-title-text">[ 编辑 ]</span> 
+                <span style="font-size: 15px; font-weight: normal; color: #64748b; margin-left: 12px;">(注：单人操作显示 [ 编辑 ]，多人同时操作显示 [ 批量编辑 ])</span>
+            </div>
+            <button class="btn-close-modal" onclick="closeUserEditor()">×</button>
+        </div>
+        <div style="display: flex; gap: 24px; margin-top: 15px;">
+            <div style="flex: 1.6; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">⚙️ 用户编辑面板</div>
+                
+                <div class="edit-group" id="group-status">
+                    <div class="edit-group-title" id="title-status"><input type="checkbox" id="chk-status" onchange="toggleGroupState('status')"> <span>账户状态<sup class="tooltip-icon" title="禁用后该用户将无法登录系统">ⓘ</sup></span></div>
+                    <div class="edit-controls" id="content-status"><select class="form-select" style="width: 100px;"><option value="active" selected>启用</option><option value="inactive">禁用</option></select></div>
+                </div>
+                
+                <div class="edit-group" id="group-storage">
+                    <div class="edit-group-title" id="title-storage"><input type="checkbox" id="chk-storage" onchange="toggleGroupState('storage')"> <span>存储空间配置<sup class="tooltip-icon" title="设置用户可使用的存储空间上限">ⓘ</sup></span></div>
+                    <div class="edit-controls" id="content-storage"><input type="number" class="form-input" value="1024" style="width: 100px;"><span style="color: #475569; font-size: 15px;">MB</span></div>
+                </div>
+                
+                <div class="edit-group" id="group-teams">
+                    <div class="edit-group-title" id="title-teams"><input type="checkbox" id="chk-teams" onchange="toggleGroupState('teams')"> <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后添加">ⓘ</sup></span></div>
+                    <div class="content-box" style="margin-top: 0;" id="content-teams">
+                        <div class="edit-controls"><div class="form-input fake-multiselect"><span id="team-text" style="color: #0f172a; font-weight: 500;"></span><span style="font-size: 12px; color: #64748b;">▼</span></div><button class="btn-admin">加入</button></div>
+                    </div>
+                </div>
+                
+                <div class="edit-group" id="group-comms">
+                    <div class="edit-group-title" id="title-comms"><input type="checkbox" id="chk-comms" onchange="toggleGroupState('comms')"> <span>【通信权限设置】</span></div>
+                    <div class="content-box" id="content-comms">
+                        <div style="display: flex; align-items: center;"><span class="sub-label-normal">允许主动与所有用户通信<sup class="tooltip-icon">ⓘ</sup>：</span><div class="edit-controls"><select class="form-select" style="width: 100px;"><option value="inactive" selected>禁用</option><option value="active">启用</option></select></div></div>
+                        <div style="display: flex; align-items: center;"><span class="sub-label-normal">允许主动与这些组通信<sup class="tooltip-icon">ⓘ</sup>：</span><div class="edit-controls"><div class="form-input fake-multiselect"><span></span><span style="font-size: 12px; color: #64748b;">▼</span></div><button class="btn-admin">添加</button></div></div>
+                        <div style="display: flex; align-items: center;"><span class="sub-label-normal">允许主动与这些用户通信<sup class="tooltip-icon">ⓘ</sup>：</span><div class="edit-controls"><div class="form-input fake-multiselect"><span></span><span style="font-size: 12px; color: #64748b;">▼</span></div><button class="btn-admin">添加</button></div></div>
+                    </div>
+                </div>
+                
+                <div class="edit-group" id="group-extra">
+                    <div class="edit-group-title" id="title-extra"><input type="checkbox" id="chk-extra" onchange="toggleGroupState('extra')"> <span>【附加权限管理】</span></div>
+                    <div class="content-box" style="flex-direction: row; flex-wrap: wrap; gap: 15px 30px;" id="content-extra">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox"> <span>允许管理所有用户的网盘<sup class="tooltip-icon">ⓘ</sup></span></label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox" checked> <span>允许添加好友<sup class="tooltip-icon">ⓘ</sup></span></label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox" checked> <span>允许创建群组<sup class="tooltip-icon">ⓘ</sup></span></label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox"> <span>允许邀请用户<sup class="tooltip-icon">ⓘ</sup></span></label>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                <div id="editor-right-title" style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">👤 当前编辑的用户</div>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 16px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow-y: auto; max-height: 550px;">
+                    
+                    <div id="view-single-user">
+                        <div id="single-username" style="font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 16px;"></div>
+                        <div class="info-row"><span class="info-label">当前状态：</span> <span class="status-on">启用</span></div>
+                        <div class="info-row"><span class="info-label">当前存储：</span> <span class="info-value">2048 MB</span></div>
+                        <div class="info-row"><span class="info-label">当前所属组：</span> <span class="info-value">开发组, 前端组</span></div>
+                        <div class="info-section-title">【通信权限】</div>
+                        <div style="padding-left: 8px;">
+                            <div class="info-row"><span class="info-label">全局通信：</span> <span class="status-off">关闭</span></div>
+                            <div class="info-row"><span class="info-label">允许的组：</span> <span class="info-value">group_backend</span></div>
+                            <div class="info-row"><span class="info-label">允许的人：</span> <span class="info-value">user_admin_01</span></div>
+                        </div>
+                        <div class="info-section-title">【附加权限】</div>
+                        <div style="padding-left: 8px;">
+                            <div class="info-row"><span class="info-label">添加好友：</span> <span class="status-on">开启</span></div>
+                            <div class="info-row"><span class="info-label">创建群组：</span> <span class="status-on">开启</span></div>
+                            <div class="info-row"><span class="info-label">管理网盘：</span> <span class="status-off">关闭</span></div>
+                            <div class="info-row"><span class="info-label">邀请用户：</span> <span class="status-off">关闭</span></div>
+                        </div>
+                    </div>
+                    
+                    <div id="view-batch-users" style="display: none; flex-direction: column; gap: 0;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel-footer">
+            <button class="btn-admin" style="background: #f1f5f9; border-color: #cbd5e1; color: #475569;" onclick="closeUserEditor()">↺ 取消修改</button>
+            <button class="btn-admin" style="background: #3b82f6; color: white; border-color: #2563eb; font-weight: 500;">💾 保存所有修改</button>
+        </div>
+    </div>
+</div>
+<script>
+    function toggleGroupState(groupId) {
+        const isChecked = document.getElementById('chk-' + groupId).checked;
+        const titleEl = document.getElementById('title-' + groupId);
+        const contentEl = document.getElementById('content-' + groupId);
+        if (isChecked) { titleEl.classList.remove('dimmed-text'); contentEl.classList.remove('dimmed-content'); } 
+        else { titleEl.classList.add('dimmed-text'); contentEl.classList.add('dimmed-content'); }
+    }
+
+    function setGroupState(groupId, state) {
+        document.getElementById('chk-' + groupId).checked = state;
+        toggleGroupState(groupId);
+    }
+
+    function openUserEditor(mode, usersData) {
+        const modal = document.getElementById('userEditModal');
+        modal.classList.add('active');
+        const titleText = document.getElementById('editor-title-text');
+        const rightTitle = document.getElementById('editor-right-title');
+        const viewSingle = document.getElementById('view-single-user');
+        const viewBatch = document.getElementById('view-batch-users');
+        const groups = ['status', 'storage', 'teams', 'comms', 'extra'];
+
+        if (mode === 'single') {
+            titleText.innerText = '[ 编辑 ]';
+            rightTitle.innerText = '👤 当前编辑的用户';
+            viewSingle.style.display = 'block';
+            viewBatch.style.display = 'none';
+            document.getElementById('single-username').innerText = usersData;
+            document.getElementById('team-text').innerText = 'group_dev';
+            groups.forEach(g => setGroupState(g, true));
+        } else if (mode === 'batch') {
+            titleText.innerText = '[ 批量编辑 ]';
+            rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
+            viewSingle.style.display = 'none';
+            viewBatch.style.display = 'flex';
+            document.getElementById('team-text').innerText = '';
+            viewBatch.innerHTML = ''; 
+            usersData.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'batch-user-item';
+                userDiv.innerText = user;
+                viewBatch.appendChild(userDiv);
+            });
+            groups.forEach(g => setGroupState(g, true));
+            setGroupState('status', false);
+            setGroupState('comms', false);
+        }
+    }
+
+    function closeUserEditor() {
+        document.getElementById('userEditModal').classList.remove('active');
+    }
+</script>
+<button class="settings-btn-EditPanel">编辑面板</button>
+
+<script>
+    // 1. 获取你的“编辑面板”按钮
+    const editPanelBtn = document.querySelector('.settings-btn-EditPanel');
+
+    // 2. 给你的按钮绑定点击事件
+    if (editPanelBtn) {
+        editPanelBtn.addEventListener('click', function() {
+            // 抓取页面上所有被打钩的复选框
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            let selectedUsers = [];
+
+            checkboxes.forEach(cb => {
+                // 排除掉“全选”复选框
+                if (cb.value && cb.value !== 'on') {
+                    selectedUsers.push(cb.value);
+                }
+            });
+
+            // 3. 判断勾选情况
+            if (selectedUsers.length > 1) {
+                openEditPanel('batch', selectedUsers);
+            } else if (selectedUsers.length === 1) {
+                openEditPanel('single', selectedUsers);
+            } else {
+                alert("⚠️ 请先在列表中勾选需要操作的用户！");
+            }
+        });
+    }
+
+    // 触发面板函数
+    function openEditPanel(mode, users) {
+        console.log("即将打开【编辑面板】", mode, users);
+        
+        // 【关键】在这里写你原本那个面板弹出来的 JS 代码
+        // 比如原本是 showMyModal()，你就把它写在这里
+    }
+</script>
 
 </body>
 
