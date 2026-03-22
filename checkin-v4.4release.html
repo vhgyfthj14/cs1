@@ -21496,6 +21496,9 @@
                     this.e_btn_editPanel.addEventListener("click", (event) => {
                     this.advanced_edit_handler(); 
                     });
+                    this.e_btn_editPanel.addEventListener("click", (event) => {
+                    this.advanced_edit_handler(); 
+                    });
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
@@ -22018,7 +22021,49 @@
         this.setGroupState('status', false); // 批量时默认关闭状态修改
     }
 }
+// 【保存逻辑】：收集数据并准备发送
+saveAllChanges() {
+    // 1. 获取选中的用户 ID 列表
+    const userIds = Array.from(this.selected_user_ids || []);
+    if (userIds.length === 0) return;
 
+    // 2. 准备一个对象来存“要修改的内容”
+    const updateData = {
+        ids: userIds,
+        configs: {}
+    };
+
+    // 3. 检查每一个配置组，看用户是否打钩了（只有打钩的才需要修改）
+    
+    // --- 状态修改 ---
+    if (document.getElementById('chk-status').checked) {
+        updateData.configs.status = document.querySelector('#content-status .form-select').value;
+    }
+
+    // --- 存储空间 ---
+    if (document.getElementById('chk-storage').checked) {
+        updateData.configs.storage_limit = document.querySelector('#content-storage .form-input').value;
+    }
+
+    // --- 附加权限（多选框） ---
+    if (document.getElementById('chk-extra').checked) {
+        const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
+        updateData.configs.permissions = {
+            manage_drive: extraCheckboxes.checked,
+            add_friends: extraCheckboxes.checked,
+            create_groups: extraCheckboxes.checked,
+            invite_users: extraCheckboxes.checked
+        };
+    }
+
+    // 4. 打印出来看看结果（实际项目中这里会调用 API）
+    console.log("准备发送给后端的数据包：", updateData);
+
+    // 5. 模拟发送成功后的处理
+    // this._send_to_server(updateData); // 你实际的后端接口函数
+    alert(`成功！已为 ${userIds.length} 个用户提交了修改。`);
+    this.closeUserEditor(); 
+}
 // 3. 辅助方法
 setGroupState(groupId, state) {
     const chk = document.getElementById('chk-' + groupId);
