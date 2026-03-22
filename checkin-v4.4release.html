@@ -21967,26 +21967,74 @@
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
-					// 编辑面板
-                    advanced_edit_handler() {
-                    const selectedUsers = Array.from(this.selected_user_ids || []);
-                    if (selectedUsers.length > 1) {
-                    this.openUserEditor('batch', selectedUsers);
-                    } else if (selectedUsers.length === 1) {
+					// 1. 修改核心触发器
+					advanced_edit_handler() {
+					const selectedUsers = Array.from(this.selected_user_ids || []);
+					if (selectedUsers.length > 1) {
+					// 批量模式：传数组
+					this.openUserEditor('batch', selectedUsers);
+					} else if (selectedUsers.length === 1) {
+					// 单人模式：传单个 ID (注意这里加了)
+					this.openUserEditor('single', selectedUsers);
+					} else {
+					alert("⚠️ 请先勾选需要编辑的用户！");
+					}
+					}
 
-                    this.openUserEditor('single', selectedUsers);
-                    } else {
-                    alert("⚠️ 请先勾选需要编辑的用户！");
+					// 2. 面板显示函数
+					openUserEditor(mode, usersData) {
+					const modal = document.getElementById('userEditModal');
+					if (!modal) return;
+    
+					modal.classList.add('active');
+					const titleText = document.getElementById('editor-title-text');
+					const rightTitle = document.getElementById('editor-right-title');
+					const viewSingle = document.getElementById('view-single-user');
+					const viewBatch = document.getElementById('view-batch-users');
+					const groups = ['status', 'storage', 'teams', 'comms', 'extra'];
+					if (mode === 'single') {
+					titleText.innerText = '[ 编辑 ]';
+					rightTitle.innerText = '👤 当前编辑的用户';
+					viewSingle.style.display = 'block';
+					viewBatch.style.display = 'none';
+					document.getElementById('single-username').innerText = "用户 ID: " + usersData;
+        
+					// 循环设置组状态
+					groups.forEach(g => this.setGroupState(g, true));
+					} else if (mode === 'batch') {
+					titleText.innerText = '[ 批量编辑 ]';
+					rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
+					viewSingle.style.display = 'none';
+					viewBatch.style.display = 'flex';
+					viewBatch.innerHTML = ''; 
+					usersData.forEach(user => {
+					const userDiv = document.createElement('div');
+					userDiv.className = 'batch-user-item';
+					userDiv.innerText = "用户 ID: " + user;
+					viewBatch.appendChild(userDiv);
+					});
+        
+        groups.forEach(g => this.setGroupState(g, true));
+        this.setGroupState('status', false); // 批量时默认关闭状态修改
     }
 }
 
-// 这是一个占位函数，用来调用你真正的面板
-openUserEditor(mode, users) {
-    console.log("正在通过模式 [" + mode + "] 打开面板，用户 ID:", users);
-    
-    // 【这里非常重要！】
-    // 请在这里写上你原本用来打开“编辑面板”的那个 JS 指令
-    // 比如： MyPanel.show(users);
+// 3. 辅助方法
+setGroupState(groupId, state) {
+    const chk = document.getElementById('chk-' + groupId);
+    if (chk) {
+        chk.checked = state;
+        // 只要 toggleGroupState 在全局作用域，这里就能直接调
+        if (typeof toggleGroupState === 'function') {
+            toggleGroupState(groupId);
+        }
+    }
+}
+
+// 4. 关闭方法
+closeUserEditor() {
+    const modal = document.getElementById('userEditModal');
+    if (modal) modal.classList.remove('active');
 }
                 // 更新删除按钮状态
                 _update_delete_button() {
@@ -26504,98 +26552,9 @@ if (textarea) {
         document.getElementById('chk-' + groupId).checked = state;
         toggleGroupState(groupId);
     }
-
-    function openUserEditor(mode, usersData) {
-        const modal = document.getElementById('userEditModal');
-        modal.classList.add('active');
-        const titleText = document.getElementById('editor-title-text');
-        const rightTitle = document.getElementById('editor-right-title');
-        const viewSingle = document.getElementById('view-single-user');
-        const viewBatch = document.getElementById('view-batch-users');
-        const groups = ['status', 'storage', 'teams', 'comms', 'extra'];
-
-        if (mode === 'single') {
-            titleText.innerText = '[ 编辑 ]';
-            rightTitle.innerText = '👤 当前编辑的用户';
-            viewSingle.style.display = 'block';
-            viewBatch.style.display = 'none';
-            document.getElementById('single-username').innerText = usersData;
-            document.getElementById('team-text').innerText = 'group_dev';
-            groups.forEach(g => setGroupState(g, true));
-        } else if (mode === 'batch') {
-            titleText.innerText = '[ 批量编辑 ]';
-            rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
-            viewSingle.style.display = 'none';
-            viewBatch.style.display = 'flex';
-            document.getElementById('team-text').innerText = '';
-            viewBatch.innerHTML = ''; 
-            usersData.forEach(user => {
-                const userDiv = document.createElement('div');
-                userDiv.className = 'batch-user-item';
-                userDiv.innerText = user;
-                viewBatch.appendChild(userDiv);
-            });
-            groups.forEach(g => setGroupState(g, true));
-            setGroupState('status', false);
-            setGroupState('comms', false);
-        }
-    }
-
     function closeUserEditor() {
         document.getElementById('userEditModal').classList.remove('active');
     }
-</script>
-<button class="settings-btn-EditPanel">编辑面板</button>
-
-<script>
-    // 1. 获取你的“编辑面板”按钮
-    const editPanelBtn = document.querySelector('.settings-btn-EditPanel');
-
-    // 2. 给你的按钮绑定点击事件
-    if (editPanelBtn) {
-        editPanelBtn.addEventListener('click', function() {
-            // 抓取页面上所有被打钩的复选框
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-            let selectedUsers = [];
-
-            checkboxes.forEach(cb => {
-                // 排除掉“全选”复选框
-                if (cb.value && cb.value !== 'on') {
-                    selectedUsers.push(cb.value);
-                }
-            });
-
-            // 3. 判断勾选情况
-            if (selectedUsers.length > 1) {
-                EditPanel('batch', selectedUsers);
-            } else if (selectedUsers.length === 1) {
-                EditPanel('single', selectedUsers);
-            } else {
-                alert("⚠️ 请先在列表中勾选需要操作的用户！");
-            }
-        });
-    }
-
-    // 触发面板函数
-    function EditPanel(mode, users) {
-        console.log("即将打开【编辑面板】", mode, users);
-        
-        // 【关键】在这里写你原本那个面板弹出来的 JS 代码
-        // 比如原本是 showMyModal()，你就把它写在这里
-    }
-    // 监听表格中复选框的变化
-document.querySelector('table').addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-    const editPanelBtn = document.querySelector('.settings-btn-EditPanel');
-    
-    if (checkboxes.length > 0) {
-        // 如果有勾选，去掉 disabled 属性（变亮）
-        editPanelBtn.removeAttribute('disabled');
-    } else {
-        // 如果没勾选，加上 disabled 属性（变灰）
-        editPanelBtn.setAttribute('disabled', 'true');
-    }
-});
 </script>
 
 </body>
