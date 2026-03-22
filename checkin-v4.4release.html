@@ -26557,6 +26557,19 @@ if (textarea) {
         // 【关键】在这里写你原本那个面板弹出来的 JS 代码
         // 比如原本是 showMyModal()，你就把它写在这里
     }
+    // 监听表格中复选框的变化
+document.querySelector('table').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+    const editPanelBtn = document.querySelector('.settings-btn-EditPanel');
+    
+    if (checkboxes.length > 0) {
+        // 如果有勾选，去掉 disabled 属性（变亮）
+        editPanelBtn.removeAttribute('disabled');
+    } else {
+        // 如果没勾选，加上 disabled 属性（变灰）
+        editPanelBtn.setAttribute('disabled', 'true');
+    }
+});
 </script>
 
 </body>
