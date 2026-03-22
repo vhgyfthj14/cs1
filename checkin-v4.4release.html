@@ -21482,11 +21482,14 @@
     <span class="settings-delete-status"></span>
 </div>
 `;
+                    // 1. 插入 HTML
                     this.container.insertAdjacentHTML("beforeend", html);
+                    // 2. 初始绑定：获取元素的控制权
                     this.e_btn_edit = this.container.querySelector(":scope button.settings-btn-edit");
                     this.e_btn_delete = this.container.querySelector(":scope button.settings-btn-delete");
                     this.e_btn_editPanel = this.container.querySelector(":scope button.settings-btn-EditPanel");
                     this.e_delete_status = this.container.querySelector(":scope span.settings-delete-status");
+                    // 3. 初始绑定：接通点击信号
                     this.e_btn_edit.addEventListener("click", (event) => {
                         this.batch_edit_users();
                     });
@@ -21496,9 +21499,12 @@
                     this.e_btn_editPanel.addEventListener("click", (event) => {
                     this.advanced_edit_handler(); 
                     });
-                    this.e_btn_editPanel.addEventListener("click", (event) => {
-                    this.advanced_edit_handler(); 
+                    const saveBtn = document.querySelector('#userEditModal .panel-footer .btn-admin:last-child');
+                    if (saveBtn) {
+                    saveBtn.addEventListener('click', () => {
+                    this.saveAllChanges(); // 点击后运行保存逻辑
                     });
+                    }
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
@@ -22033,8 +22039,6 @@ saveAllChanges() {
         configs: {}
     };
 
-    // 3. 检查每一个配置组，看用户是否打钩了（只有打钩的才需要修改）
-    
     // --- 状态修改 ---
     if (document.getElementById('chk-status').checked) {
         updateData.configs.status = document.querySelector('#content-status .form-select').value;
@@ -22045,22 +22049,24 @@ saveAllChanges() {
         updateData.configs.storage_limit = document.querySelector('#content-storage .form-input').value;
     }
 
-    // --- 附加权限（多选框） ---
+    // --- 附加权限（这里是修正后的逻辑） ---
     if (document.getElementById('chk-extra').checked) {
+        // 抓取该区域下所有的复选框
         const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
+        
+        // 按照你 HTML 里的顺序（0:网盘, 1:好友, 2:群组, 3:邀请）分别取值
         updateData.configs.permissions = {
-            manage_drive: extraCheckboxes.checked,
+            manage_drive: extraCheckboxes.checked, 
             add_friends: extraCheckboxes.checked,
             create_groups: extraCheckboxes.checked,
             invite_users: extraCheckboxes.checked
         };
     }
 
-    // 4. 打印出来看看结果（实际项目中这里会调用 API）
+    // 4. 打印结果
     console.log("准备发送给后端的数据包：", updateData);
 
-    // 5. 模拟发送成功后的处理
-    // this._send_to_server(updateData); // 你实际的后端接口函数
+    // 5. 提示并关闭
     alert(`成功！已为 ${userIds.length} 个用户提交了修改。`);
     this.closeUserEditor(); 
 }
@@ -26509,45 +26515,102 @@ if (textarea) {
             <button class="btn-close-modal" onclick="closeUserEditor()">×</button>
         </div>
         <div style="display: flex; gap: 24px; margin-top: 15px;">
-            <div style="flex: 1.6; display: flex; flex-direction: column; gap: 10px;">
-                <div style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">⚙️ 用户编辑面板</div>
-                
-                <div class="edit-group" id="group-status">
-                    <div class="edit-group-title" id="title-status"><input type="checkbox" id="chk-status" onchange="toggleGroupState('status')"> <span>账户状态<sup class="tooltip-icon" title="禁用后该用户将无法登录系统">ⓘ</sup></span></div>
-                    <div class="edit-controls" id="content-status"><select class="form-select" style="width: 100px;"><option value="active" selected>启用</option><option value="inactive">禁用</option></select></div>
+            <<div style="flex: 1.6; display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">⚙️ 用户编辑面板</div>
+
+    <div class="edit-group" id="group-status">
+        <div class="edit-group-title" id="title-status">
+            <input type="checkbox" id="chk-status" onchange="toggleGroupState('status')"> 
+            <span>账户状态<sup class="tooltip-icon" title="禁用后该用户将无法登录系统">ⓘ</sup></span>
+        </div>
+        <div class="edit-controls" id="content-status">
+            <select class="form-select" style="width: 100px;">
+                <option value="active" selected>启用</option>
+                <option value="inactive">禁用</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="edit-group" id="group-storage">
+        <div class="edit-group-title" id="title-storage">
+            <input type="checkbox" id="chk-storage" onchange="toggleGroupState('storage')"> 
+            <span>存储空间配置<sup class="tooltip-icon" title="设置用户可使用的存储空间上限">ⓘ</sup></span>
+        </div>
+        <div class="edit-controls" id="content-storage">
+            <input type="number" class="form-input" value="1024" style="width: 100px;">
+            <span style="color: #475569; font-size: 15px;">MB</span>
+        </div>
+    </div>
+
+    <div class="edit-group" id="group-teams">
+        <div class="edit-group-title" id="title-teams">
+            <input type="checkbox" id="chk-teams" onchange="toggleGroupState('teams')"> 
+            <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后加入">ⓘ</sup></span>
+        </div>
+        <div class="content-box" style="margin-top: 0;" id="content-teams">
+            <div class="edit-controls">
+                <div class="form-input fake-multiselect">
+                    <span id="team-text" style="color: #0f172a; font-weight: 500;"></span>
+                    <span style="font-size: 12px; color: #64748b;">▼</span>
                 </div>
-                
-                <div class="edit-group" id="group-storage">
-                    <div class="edit-group-title" id="title-storage"><input type="checkbox" id="chk-storage" onchange="toggleGroupState('storage')"> <span>存储空间配置<sup class="tooltip-icon" title="设置用户可使用的存储空间上限">ⓘ</sup></span></div>
-                    <div class="edit-controls" id="content-storage"><input type="number" class="form-input" value="1024" style="width: 100px;"><span style="color: #475569; font-size: 15px;">MB</span></div>
-                </div>
-                
-                <div class="edit-group" id="group-teams">
-                    <div class="edit-group-title" id="title-teams"><input type="checkbox" id="chk-teams" onchange="toggleGroupState('teams')"> <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后添加">ⓘ</sup></span></div>
-                    <div class="content-box" style="margin-top: 0;" id="content-teams">
-                        <div class="edit-controls"><div class="form-input fake-multiselect"><span id="team-text" style="color: #0f172a; font-weight: 500;"></span><span style="font-size: 12px; color: #64748b;">▼</span></div><button class="btn-admin">加入</button></div>
-                    </div>
-                </div>
-                
-                <div class="edit-group" id="group-comms">
-                    <div class="edit-group-title" id="title-comms"><input type="checkbox" id="chk-comms" onchange="toggleGroupState('comms')"> <span>【通信权限设置】</span></div>
-                    <div class="content-box" id="content-comms">
-                        <div style="display: flex; align-items: center;"><span class="sub-label-normal">允许主动与所有用户通信<sup class="tooltip-icon">ⓘ</sup>：</span><div class="edit-controls"><select class="form-select" style="width: 100px;"><option value="inactive" selected>禁用</option><option value="active">启用</option></select></div></div>
-                        <div style="display: flex; align-items: center;"><span class="sub-label-normal">允许主动与这些组通信<sup class="tooltip-icon">ⓘ</sup>：</span><div class="edit-controls"><div class="form-input fake-multiselect"><span></span><span style="font-size: 12px; color: #64748b;">▼</span></div><button class="btn-admin">添加</button></div></div>
-                        <div style="display: flex; align-items: center;"><span class="sub-label-normal">允许主动与这些用户通信<sup class="tooltip-icon">ⓘ</sup>：</span><div class="edit-controls"><div class="form-input fake-multiselect"><span></span><span style="font-size: 12px; color: #64748b;">▼</span></div><button class="btn-admin">添加</button></div></div>
-                    </div>
-                </div>
-                
-                <div class="edit-group" id="group-extra">
-                    <div class="edit-group-title" id="title-extra"><input type="checkbox" id="chk-extra" onchange="toggleGroupState('extra')"> <span>【附加权限管理】</span></div>
-                    <div class="content-box" style="flex-direction: row; flex-wrap: wrap; gap: 15px 30px;" id="content-extra">
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox"> <span>允许管理所有用户的网盘<sup class="tooltip-icon">ⓘ</sup></span></label>
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox" checked> <span>允许添加好友<sup class="tooltip-icon">ⓘ</sup></span></label>
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox" checked> <span>允许创建群组<sup class="tooltip-icon">ⓘ</sup></span></label>
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;"><input type="checkbox"> <span>允许邀请用户<sup class="tooltip-icon">ⓘ</sup></span></label>
-                    </div>
+                <button class="btn-admin">加入</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="edit-group" id="group-comms">
+        <div class="edit-group-title" id="title-comms">
+            <input type="checkbox" id="chk-comms" onchange="toggleGroupState('comms')"> 
+            <span>【通信权限设置】</span>
+        </div>
+        <div class="content-box" id="content-comms">
+            <div style="display: flex; align-items: center;">
+                <span class="sub-label-normal">允许主动与所有用户通信<sup class="tooltip-icon" title="启用后用户可与系统内任何用户通信">ⓘ</sup>：</span>
+                <div class="edit-controls">
+                    <select class="form-select" style="width: 100px;">
+                        <option value="inactive" selected>禁用</option>
+                        <option value="active">启用</option>
+                    </select>
                 </div>
             </div>
+            <div style="display: flex; align-items: center;">
+                <span class="sub-label-normal">允许主动与这些组通信<sup class="tooltip-icon" title="设定该用户只能与指定的组进行通信">ⓘ</sup>：</span>
+                <div class="edit-controls">
+                    <div class="form-input fake-multiselect"><span></span><span style="font-size: 12px; color: #64748b;">▼</span></div>
+                    <button class="btn-admin">添加</button>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span class="sub-label-normal">允许主动与这些用户通信<sup class="tooltip-icon" title="设定该用户只能与指定的用户进行通信">ⓘ</sup>：</span>
+                <div class="edit-controls">
+                    <div class="form-input fake-multiselect"><span></span><span style="font-size: 12px; color: #64748b;">▼</span></div>
+                    <button class="btn-admin">添加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="edit-group" id="group-extra">
+        <div class="edit-group-title" id="title-extra">
+            <input type="checkbox" id="chk-extra" onchange="toggleGroupState('extra')"> 
+            <span>【附加权限管理】</span>
+        </div>
+        <div class="content-box" style="flex-direction: row; flex-wrap: wrap; gap: 15px 30px;" id="content-extra">
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                <input type="checkbox"> <span>允许管理所有用户的网盘<sup class="tooltip-icon" title="拥有此权限的用户可访问和管理所有文件">ⓘ</sup></span>
+            </label>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                <input type="checkbox" checked> <span>允许添加好友<sup class="tooltip-icon" title="禁用后用户无法向其他用户发送好友请求">ⓘ</sup></span>
+            </label>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                <input type="checkbox" checked> <span>允许创建群组<sup class="tooltip-icon" title="禁用后用户无法创建新的群组">ⓘ</sup></span>
+            </label>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                <input type="checkbox"> <span>允许邀请用户<sup class="tooltip-icon" title="禁用后用户无法邀请其他用户加入群组">ⓘ</sup></span>
+            </label>
+        </div>
+    </div>
+</div>
             
             <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
                 <div id="editor-right-title" style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">👤 当前编辑的用户</div>
