@@ -21967,7 +21967,27 @@
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
+					// 编辑面板
+                    advanced_edit_handler() {
+                    const selectedUsers = Array.from(this.selected_user_ids || []);
+                    if (selectedUsers.length > 1) {
+                    this.openUserEditor('batch', selectedUsers);
+                    } else if (selectedUsers.length === 1) {
 
+                    this.openUserEditor('single', selectedUsers);
+                    } else {
+                    alert("⚠️ 请先勾选需要编辑的用户！");
+    }
+}
+
+// 这是一个占位函数，用来调用你真正的面板
+openUserEditor(mode, users) {
+    console.log("正在通过模式 [" + mode + "] 打开面板，用户 ID:", users);
+    
+    // 【这里非常重要！】
+    // 请在这里写上你原本用来打开“编辑面板”的那个 JS 指令
+    // 比如： MyPanel.show(users);
+}
                 // 更新删除按钮状态
                 _update_delete_button() {
                     if (this.selected_user_ids.size > 0) {
