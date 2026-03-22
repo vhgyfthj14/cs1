@@ -21980,21 +21980,20 @@
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
-// 1. 核心触发器
+// 1. 核心触发器：点击【编辑面板】按钮时运行
 advanced_edit_handler() {
     const selectedUsers = Array.from(this.selected_user_ids || []);
     if (selectedUsers.length > 1) {
-        // 批量模式：传整个数组
         this.openUserEditor('batch', selectedUsers);
     } else if (selectedUsers.length === 1) {
-        // 使用 .at(0) 代替方括号，防止被你的编辑器吞掉
+        // 使用 .at(0) 避开方括号，获取第一个选中的 ID
         this.openUserEditor('single', selectedUsers.at(0)); 
     } else {
         alert("⚠️ 请先勾选需要编辑的用户！");
     }
 }
 
-// 2. 【接入真数据】：渲染搜索下拉框数据
+// 2. 渲染真实的组和用户到下拉框中
 renderDropdownData() {
     const allGroups = (this.teams || []).map(t => t.name); 
     const allUsers = (this.users || []).map(u => u.username);
@@ -22013,18 +22012,23 @@ renderDropdownData() {
     if(dcu) dcu.innerHTML = generateHtml(allUsers);
 }
 
-// 3. 【接入真数据 + 自动回填】：打开面板并填充信息
+// 3. 面板显示函数：包含【数据回填】+【表单重置】+【按钮绑定】
 openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
     if (!modal) return;    
     
-    // 1. 重新渲染下拉框（自带清空上一次所有勾选状态的效果）
+    // 每次打开都重新渲染下拉列表并清理搜索框，防止数据残留
     this.renderDropdownData(); 
-
-    // 2. 清空所有的搜索输入框里残留的文字
     document.querySelectorAll('.search-select-input').forEach(input => input.value = '');
-
+    
     modal.classList.add('active');
+
+    // 【强行绑定保存按钮】解决点击没反应的问题
+    const saveBtn = document.getElementById('btn-save-user-edits');
+    if (saveBtn) {
+        saveBtn.onclick = () => this.saveAllChanges();
+    }
+
     const titleText = document.getElementById('editor-title-text');
     const rightTitle = document.getElementById('editor-right-title');
     const viewSingle = document.getElementById('view-single-user');
@@ -22037,60 +22041,27 @@ openUserEditor(mode, usersData) {
         viewSingle.style.display = 'block';
         viewBatch.style.display = 'none';
         
+        // 查找真实的用户对象
         const user = (this.users || []).find(u => u.id === usersData);
         if (user) {
             document.getElementById('single-username').innerText = `👤 ${user.username} (ID: ${user.id})`;
             
-            // ==========================================
-            // 【右侧】显示该用户的真实数据
-            // ==========================================
-            const elStatus = document.getElementById('r-status');
-            elStatus.innerText = user.status === 'active' ? '启用' : '禁用';
-            elStatus.className = user.status === 'active' ? 'status-on' : 'status-off';
-            
+            // --- 右侧显示：回填真实状态 ---
+            document.getElementById('r-status').innerText = user.status === 'active' ? '启用' : '禁用';
             document.getElementById('r-storage').innerText = `${user.storage_quota || 0} MB`;
             document.getElementById('r-teams').innerText = (user.join_groups || []).join(', ') || '无';
 
-            const commGlobal = user.comm_settings?.global_comm === 'active';
-            document.getElementById('r-comm-global').innerText = commGlobal ? '开启' : '关闭';
-            document.getElementById('r-comm-global').className = commGlobal ? 'status-on' : 'status-off';
-            document.getElementById('r-comm-groups').innerText = (user.comm_settings?.allowed_groups || []).join(', ') || '无';
-            document.getElementById('r-comm-users').innerText = (user.comm_settings?.allowed_users || []).join(', ') || '无';
-
-            const setPerm = (id, val) => {
-                const el = document.getElementById(id);
-                el.innerText = val ? '开启' : '关闭';
-                el.className = val ? 'status-on' : 'status-off';
-            };
-            setPerm('r-perm-drive', user.extra_permissions?.manage_drive);
-            setPerm('r-perm-friend', user.extra_permissions?.add_friends);
-            setPerm('r-perm-group', user.extra_permissions?.create_group);
-            setPerm('r-perm-invite', user.extra_permissions?.invite_user);
-
-            // ==========================================
-            // 【左侧】表单数据自动回填 (彻底解决残留问题)
-            // ==========================================
+            // --- 左侧表单：自动对齐用户当前的数据 (解决你说的取消后还是上次页面的问题) ---
             document.querySelector('#content-status .form-select').value = user.status || 'active';
             document.querySelector('#content-storage .form-input').value = user.storage_quota || 1024;
-            document.querySelector('#content-comms .form-select').value = user.comm_settings?.global_comm || 'inactive';
-
-            // 辅助函数：把用户已有的组/人自动打上 ☑ 勾
-            const autoCheckValues = (dropdownId, valuesArray) => {
-                if (!valuesArray) return;
-                const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
-                cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
-            };
-            autoCheckValues('dropdown-teams', user.join_groups);
-            autoCheckValues('dropdown-comm-groups', user.comm_settings?.allowed_groups);
-            autoCheckValues('dropdown-comm-users', user.comm_settings?.allowed_users);
-
-            // 附加权限自动恢复
-            const extraCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
-            if (extraCbs.length >= 4) {
-                extraCbs.item(0).checked = !!user.extra_permissions?.manage_drive;
-                extraCbs.item(1).checked = !!user.extra_permissions?.add_friends;
-                extraCbs.item(2).checked = !!user.extra_permissions?.create_group;
-                extraCbs.item(3).checked = !!user.extra_permissions?.invite_user;
+            
+            // 附加权限复选框自动同步
+            const exCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
+            if (exCbs.length >= 4) {
+                exCbs.item(0).checked = !!user.extra_permissions?.manage_drive;
+                exCbs.item(1).checked = !!user.extra_permissions?.add_friends;
+                exCbs.item(2).checked = !!user.extra_permissions?.create_group;
+                exCbs.item(3).checked = !!user.extra_permissions?.invite_user;
             }
         }
         groups.forEach(g => this.setGroupState(g, true));
@@ -22101,25 +22072,12 @@ openUserEditor(mode, usersData) {
         viewSingle.style.display = 'none';
         viewBatch.style.display = 'flex';
         viewBatch.innerHTML = ''; 
-
-        // 批量模式：将左侧表单恢复到干净的初始默认值
-        document.querySelector('#content-status .form-select').value = 'active';
-        document.querySelector('#content-storage .form-input').value = '1024';
-        document.querySelector('#content-comms .form-select').value = 'inactive';
-        const extraCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        if (extraCbs.length >= 4) {
-            extraCbs.item(0).checked = false;
-            extraCbs.item(1).checked = true;
-            extraCbs.item(2).checked = true;
-            extraCbs.item(3).checked = false;
-        }
         
         usersData.forEach(userId => {
             const user = (this.users || []).find(u => u.id === userId);
-            const userNameDisplay = user ? user.username : userId;
             const userDiv = document.createElement('div');
             userDiv.className = 'batch-user-item';
-            userDiv.innerText = `👤 ${userNameDisplay} (ID: ${userId})`;
+            userDiv.innerText = `👤 ${user ? user.username : userId}`;
             viewBatch.appendChild(userDiv);
         });
         groups.forEach(g => this.setGroupState(g, true));
@@ -22127,7 +22085,7 @@ openUserEditor(mode, usersData) {
     }
 }
 
-// 4. 【接入真接口】：打包数据发给后端
+// 4. 保存逻辑：真正把数据打包发往后端
 async saveAllChanges() { 
     const userIds = Array.from(this.selected_user_ids || []);
     if (userIds.length === 0) return;
@@ -22142,6 +22100,7 @@ async saveAllChanges() {
         return Array.from(checkboxes).map(cb => cb.value);
     };
 
+    // 收集勾选的数据
     if (document.getElementById('chk-status').checked) {
         payload.modifications.status = document.querySelector('#content-status .form-select').value;
     }
@@ -22158,49 +22117,46 @@ async saveAllChanges() {
             allowed_users: getCheckedValues('dropdown-comm-users')
         };
     }
-   if (document.getElementById('chk-extra').checked) {
-        const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        // 使用 .item() 代替方括号，完美绕过过滤 Bug！
+    if (document.getElementById('chk-extra').checked) {
+        const ex = document.querySelectorAll('#content-extra input[type="checkbox"]');
+        // 使用 .item() 避开方括号，确保布尔值正确抓取
         payload.modifications.extra_permissions = {
-            manage_drive: extraCheckboxes.item(0).checked, 
-            add_friends: extraCheckboxes.item(1).checked,
-            create_group: extraCheckboxes.item(2).checked, 
-            invite_user: extraCheckboxes.item(3).checked   
+            manage_drive: ex.item(0).checked, 
+            add_friends: ex.item(1).checked,
+            create_group: ex.item(2).checked, 
+            invite_user: ex.item(3).checked   
         };
     }
 
-    console.log("即将发往后端的数据：", payload);
-
     try {
+        // 调用后端接口
         const response = await window.app.api_request('PUT', '/api/admin/users/batch', payload);
         if (response && response.success) {
             MessageMark.success(`成功配置！已修改 ${userIds.length} 个用户。`);
             this.closeUserEditor();
+            // 刷新列表数据
             this.selected_user_ids.clear();
-            this._update_delete_button();
+            if(this._update_delete_button) this._update_delete_button();
             await this._load_users_from_server(); 
             this.render();
         } else {
-            MessageMark.error('保存失败: ' + (response.error || '未知错误'));
+            alert('保存失败: ' + (response.error || '未知错误'));
         }
     } catch (error) {
         console.error(error);
-        MessageMark.error('网络请求失败');
+        alert('保存过程中发生网络错误');
     }
 }
 
-// 5. 辅助方法
+// 5. 辅助与清理函数
 setGroupState(groupId, state) {
     const chk = document.getElementById('chk-' + groupId);
     if (chk) {
         chk.checked = state;
-        if (typeof toggleGroupState === 'function') {
-            toggleGroupState(groupId);
-        }
+        if (typeof toggleGroupState === 'function') toggleGroupState(groupId);
     }
 }
 
-// 6. 关闭面板
 closeUserEditor() {
     const modal = document.getElementById('userEditModal');
     if (modal) modal.classList.remove('active');
