@@ -21976,52 +21976,43 @@
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
-					// 1. 核心触发器
+// 1. 核心触发器
 advanced_edit_handler() {
     const selectedUsers = Array.from(this.selected_user_ids || []);
     if (selectedUsers.length > 1) {
-        // 批量模式：传整个数组
         this.openUserEditor('batch', selectedUsers);
     } else if (selectedUsers.length === 1) {
-        // 单人模式：传单个 ID (注意这里加上了，只传字符串更稳定)
-        this.openUserEditor('single', selectedUsers);
+        // 修复1：加上，只传具体的 ID 字符串
+        this.openUserEditor('single', selectedUsers); 
     } else {
         alert("⚠️ 请先勾选需要编辑的用户！");
     }
 }
 
-// 2. 【全新新增】：渲染搜索下拉框数据
+// 2. 【接入真数据】：渲染搜索下拉框数据
 renderDropdownData() {
-    // 模拟的系统数据（实际中可以是后端传来的）
-    const allGroups = ['开发组', '前端组', '后端组', '测试组', '运维组', '产品组'];
-    const allUsers = ['admin', 'user_01', 'user_02', 'ZhangSan', 'LiSi', 'WangWu'];
-
+    const allGroups = (this.teams || []).map(t => t.name); 
+    const allUsers = (this.users || []).map(u => u.username);
     const generateHtml = (items) => items.map(item => `
         <label class="search-select-item">
             <input type="checkbox" value="${item}">
             <span>${item}</span>
         </label>
     `).join('');
-
-    // 将生成的带 ☑ 的列表塞进 HTML 结构里
     const dt = document.getElementById('dropdown-teams');
     if(dt) dt.innerHTML = generateHtml(allGroups);
-    
     const dcg = document.getElementById('dropdown-comm-groups');
     if(dcg) dcg.innerHTML = generateHtml(allGroups);
-    
     const dcu = document.getElementById('dropdown-comm-users');
     if(dcu) dcu.innerHTML = generateHtml(allUsers);
 }
 
-// 3. 面板显示函数 (升级版)
+// 3. 【接入真数据】：打开面板并填充右侧信息
 openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
     if (!modal) return;    
     
-    // 打开面板前，先把下拉框的数据准备好
-    this.renderDropdownData();
-    
+    this.renderDropdownData(); 
     modal.classList.add('active');
     const titleText = document.getElementById('editor-title-text');
     const rightTitle = document.getElementById('editor-right-title');
@@ -22034,83 +22025,117 @@ openUserEditor(mode, usersData) {
         rightTitle.innerText = '👤 当前编辑的用户';
         viewSingle.style.display = 'block';
         viewBatch.style.display = 'none';
-        document.getElementById('single-username').innerText = "用户 ID: " + usersData;        
-        // 循环设置组状态
+        
+        const user = (this.users || []).find(u => u.id === usersData);
+        if (user) {
+            document.getElementById('single-username').innerText = `👤 ${user.username} (ID: ${user.id})`;
+            
+            const elStatus = document.getElementById('r-status');
+            elStatus.innerText = user.status === 'active' ? '启用' : '禁用';
+            elStatus.className = user.status === 'active' ? 'status-on' : 'status-off';
+            
+            document.getElementById('r-storage').innerText = `${user.storage_quota || 0} MB`;
+            document.getElementById('r-teams').innerText = (user.join_groups || []).join(', ') || '无';
+
+            const commGlobal = user.comm_settings?.global_comm === 'active';
+            document.getElementById('r-comm-global').innerText = commGlobal ? '开启' : '关闭';
+            document.getElementById('r-comm-global').className = commGlobal ? 'status-on' : 'status-off';
+            document.getElementById('r-comm-groups').innerText = (user.comm_settings?.allowed_groups || []).join(', ') || '无';
+            document.getElementById('r-comm-users').innerText = (user.comm_settings?.allowed_users || []).join(', ') || '无';
+
+            const setPerm = (id, val) => {
+                const el = document.getElementById(id);
+                el.innerText = val ? '开启' : '关闭';
+                el.className = val ? 'status-on' : 'status-off';
+            };
+            setPerm('r-perm-drive', user.extra_permissions?.manage_drive);
+            setPerm('r-perm-friend', user.extra_permissions?.add_friends);
+            setPerm('r-perm-group', user.extra_permissions?.create_group);
+            setPerm('r-perm-invite', user.extra_permissions?.invite_user);
+        }
         groups.forEach(g => this.setGroupState(g, true));
+
     } else if (mode === 'batch') {
         titleText.innerText = '[ 批量编辑 ]';
         rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
         viewSingle.style.display = 'none';
         viewBatch.style.display = 'flex';
         viewBatch.innerHTML = ''; 
-        usersData.forEach(user => {
+        
+        usersData.forEach(userId => {
+            const user = (this.users || []).find(u => u.id === userId);
+            const userNameDisplay = user ? user.username : userId;
             const userDiv = document.createElement('div');
             userDiv.className = 'batch-user-item';
-            userDiv.innerText = "用户 ID: " + user;
+            userDiv.innerText = `👤 ${userNameDisplay} (ID: ${userId})`;
             viewBatch.appendChild(userDiv);
         });
         groups.forEach(g => this.setGroupState(g, true));
-        this.setGroupState('status', false); // 批量时默认关闭状态修改
+        this.setGroupState('status', false); 
     }
 }
 
-// 4. 【终极版保存逻辑】：收集所有数据并准备发送
-saveAllChanges() {
+// 4. 【接入真接口】：打包数据发给后端
+async saveAllChanges() { 
     const userIds = Array.from(this.selected_user_ids || []);
     if (userIds.length === 0) return;
 
-    // 准备一个对象来存“要修改的内容”
-    const updateData = {
-        ids: userIds,
-        configs: {}
+    const payload = {
+        target_ids: userIds, 
+        modifications: {}   
     };
 
-    // 辅助工具：获取某个下拉框里所有被打钩的值
     const getCheckedValues = (dropdownId) => {
         const checkboxes = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]:checked`);
         return Array.from(checkboxes).map(cb => cb.value);
     };
 
-    // --- 状态修改 ---
     if (document.getElementById('chk-status').checked) {
-        updateData.configs.status = document.querySelector('#content-status .form-select').value;
+        payload.modifications.status = document.querySelector('#content-status .form-select').value;
     }
-
-    // --- 存储空间 ---
     if (document.getElementById('chk-storage').checked) {
-        // 使用 parseInt 确保拿到的是纯数字
-        updateData.configs.storage_limit = parseInt(document.querySelector('#content-storage .form-input').value, 10);
+        payload.modifications.storage_quota = parseInt(document.querySelector('#content-storage .form-input').value, 10);
     }
-
-    // --- 所属组管理 (获取多选结果) ---
     if (document.getElementById('chk-teams').checked) {
-        updateData.configs.join_groups = getCheckedValues('dropdown-teams');
+        payload.modifications.join_groups = getCheckedValues('dropdown-teams');
     }
-
-    // --- 通信权限设置 (获取多选结果) ---
     if (document.getElementById('chk-comms').checked) {
-        updateData.configs.communication = {
-            allow_all: document.querySelector('#content-comms .form-select').value,
+        payload.modifications.comm_settings = {
+            global_comm: document.querySelector('#content-comms .form-select').value,
             allowed_groups: getCheckedValues('dropdown-comm-groups'),
             allowed_users: getCheckedValues('dropdown-comm-users')
         };
     }
-
-    // --- 附加权限（已彻底修复 Bug 的版本） ---
     if (document.getElementById('chk-extra').checked) {
         const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        updateData.configs.permissions = {
+        // 修复2：带上了, 索引
+        payload.modifications.extra_permissions = {
             manage_drive: extraCheckboxes.checked, 
             add_friends: extraCheckboxes.checked,
-            create_groups: extraCheckboxes.checked,
-            invite_users: extraCheckboxes.checked
+            create_group: extraCheckboxes.checked, 
+            invite_user: extraCheckboxes.checked   
         };
     }
 
-    // 打印结果看看
-    console.log("准备发送给后端的数据包：", updateData);
-    alert(`成功！已为 ${userIds.length} 个用户提交了修改。打开 F12 控制台查看数据包！`);
-    this.closeUserEditor(); 
+    // 修复3：去掉了悬空的报错代码，正确放在 try-catch 里面
+    console.log("即将发往后端的数据：", payload);
+
+    try {
+        const response = await window.app.api_request('PUT', '/api/admin/users/batch', payload);
+        if (response && response.success) {
+            MessageMark.success(`成功配置！已修改 ${userIds.length} 个用户。`);
+            this.closeUserEditor();
+            this.selected_user_ids.clear();
+            this._update_delete_button();
+            await this._load_users_from_server(); 
+            this.render();
+        } else {
+            MessageMark.error('保存失败: ' + (response.error || '未知错误'));
+        }
+    } catch (error) {
+        console.error(error);
+        MessageMark.error('网络请求失败');
+    }
 }
 
 // 5. 辅助方法
@@ -22124,24 +22149,11 @@ setGroupState(groupId, state) {
     }
 }
 
-// 6. 关闭方法
+// 6. 关闭面板
 closeUserEditor() {
     const modal = document.getElementById('userEditModal');
     if (modal) modal.classList.remove('active');
 }
-                // 更新删除按钮状态
-                _update_delete_button() {
-                    if (this.selected_user_ids.size > 0) {
-                        this.e_btn_edit.disabled = false;
-                        this.e_btn_delete.disabled = false;
-                        this.e_btn_editPanel.disabled = false;
-                    } else {
-                        this.e_btn_edit.disabled = true;
-                        this.e_btn_delete.disabled = true;
-                        this.e_btn_editPanel.disabled = true;
-                    }
-                }
-
                 // 批量删除用户
                 batch_delete_users() {
                     const count = this.selected_user_ids.size;
@@ -26722,23 +26734,25 @@ if (textarea) {
                 <div id="editor-right-title" style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">👤 当前编辑的用户</div>
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 16px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow-y: auto; max-height: 550px;">
                     
-                    <div id="view-single-user">
+                   <div id="view-single-user">
                         <div id="single-username" style="font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 16px;"></div>
-                        <div class="info-row"><span class="info-label">当前状态：</span> <span class="status-on">启用</span></div>
-                        <div class="info-row"><span class="info-label">当前存储：</span> <span class="info-value">2048 MB</span></div>
-                        <div class="info-row"><span class="info-label">当前所属组：</span> <span class="info-value">开发组, 前端组</span></div>
+                        <div class="info-row"><span class="info-label">当前状态：</span> <span id="r-status" class="status-on">启用</span></div>
+                        <div class="info-row"><span class="info-label">当前存储：</span> <span id="r-storage" class="info-value">0 MB</span></div>
+                        <div class="info-row"><span class="info-label">当前所属组：</span> <span id="r-teams" class="info-value">无</span></div>
+                        
                         <div class="info-section-title">【通信权限】</div>
                         <div style="padding-left: 8px;">
-                            <div class="info-row"><span class="info-label">全局通信：</span> <span class="status-off">关闭</span></div>
-                            <div class="info-row"><span class="info-label">允许的组：</span> <span class="info-value">group_backend</span></div>
-                            <div class="info-row"><span class="info-label">允许的人：</span> <span class="info-value">user_admin_01</span></div>
+                            <div class="info-row"><span class="info-label">全局通信：</span> <span id="r-comm-global" class="status-off">关闭</span></div>
+                            <div class="info-row"><span class="info-label">允许的组：</span> <span id="r-comm-groups" class="info-value">无</span></div>
+                            <div class="info-row"><span class="info-label">允许的人：</span> <span id="r-comm-users" class="info-value">无</span></div>
                         </div>
+                        
                         <div class="info-section-title">【附加权限】</div>
                         <div style="padding-left: 8px;">
-                            <div class="info-row"><span class="info-label">添加好友：</span> <span class="status-on">开启</span></div>
-                            <div class="info-row"><span class="info-label">创建群组：</span> <span class="status-on">开启</span></div>
-                            <div class="info-row"><span class="info-label">管理网盘：</span> <span class="status-off">关闭</span></div>
-                            <div class="info-row"><span class="info-label">邀请用户：</span> <span class="status-off">关闭</span></div>
+                            <div class="info-row"><span class="info-label">管理网盘：</span> <span id="r-perm-drive" class="status-off">关闭</span></div>
+                            <div class="info-row"><span class="info-label">添加好友：</span> <span id="r-perm-friend" class="status-on">开启</span></div>
+                            <div class="info-row"><span class="info-label">创建群组：</span> <span id="r-perm-group" class="status-on">开启</span></div>
+                            <div class="info-row"><span class="info-label">邀请用户：</span> <span id="r-perm-invite" class="status-off">关闭</span></div>
                         </div>
                     </div>
                     
