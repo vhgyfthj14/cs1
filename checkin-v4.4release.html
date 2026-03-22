@@ -22013,12 +22013,17 @@ renderDropdownData() {
     if(dcu) dcu.innerHTML = generateHtml(allUsers);
 }
 
-// 3. 【接入真数据】：打开面板并填充右侧信息
+// 3. 【接入真数据 + 自动回填】：打开面板并填充信息
 openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
     if (!modal) return;    
     
+    // 1. 重新渲染下拉框（自带清空上一次所有勾选状态的效果）
     this.renderDropdownData(); 
+
+    // 2. 清空所有的搜索输入框里残留的文字
+    document.querySelectorAll('.search-select-input').forEach(input => input.value = '');
+
     modal.classList.add('active');
     const titleText = document.getElementById('editor-title-text');
     const rightTitle = document.getElementById('editor-right-title');
@@ -22036,6 +22041,9 @@ openUserEditor(mode, usersData) {
         if (user) {
             document.getElementById('single-username').innerText = `👤 ${user.username} (ID: ${user.id})`;
             
+            // ==========================================
+            // 【右侧】显示该用户的真实数据
+            // ==========================================
             const elStatus = document.getElementById('r-status');
             elStatus.innerText = user.status === 'active' ? '启用' : '禁用';
             elStatus.className = user.status === 'active' ? 'status-on' : 'status-off';
@@ -22058,6 +22066,32 @@ openUserEditor(mode, usersData) {
             setPerm('r-perm-friend', user.extra_permissions?.add_friends);
             setPerm('r-perm-group', user.extra_permissions?.create_group);
             setPerm('r-perm-invite', user.extra_permissions?.invite_user);
+
+            // ==========================================
+            // 【左侧】表单数据自动回填 (彻底解决残留问题)
+            // ==========================================
+            document.querySelector('#content-status .form-select').value = user.status || 'active';
+            document.querySelector('#content-storage .form-input').value = user.storage_quota || 1024;
+            document.querySelector('#content-comms .form-select').value = user.comm_settings?.global_comm || 'inactive';
+
+            // 辅助函数：把用户已有的组/人自动打上 ☑ 勾
+            const autoCheckValues = (dropdownId, valuesArray) => {
+                if (!valuesArray) return;
+                const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
+                cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
+            };
+            autoCheckValues('dropdown-teams', user.join_groups);
+            autoCheckValues('dropdown-comm-groups', user.comm_settings?.allowed_groups);
+            autoCheckValues('dropdown-comm-users', user.comm_settings?.allowed_users);
+
+            // 附加权限自动恢复
+            const extraCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
+            if (extraCbs.length >= 4) {
+                extraCbs.item(0).checked = !!user.extra_permissions?.manage_drive;
+                extraCbs.item(1).checked = !!user.extra_permissions?.add_friends;
+                extraCbs.item(2).checked = !!user.extra_permissions?.create_group;
+                extraCbs.item(3).checked = !!user.extra_permissions?.invite_user;
+            }
         }
         groups.forEach(g => this.setGroupState(g, true));
 
@@ -22067,6 +22101,18 @@ openUserEditor(mode, usersData) {
         viewSingle.style.display = 'none';
         viewBatch.style.display = 'flex';
         viewBatch.innerHTML = ''; 
+
+        // 批量模式：将左侧表单恢复到干净的初始默认值
+        document.querySelector('#content-status .form-select').value = 'active';
+        document.querySelector('#content-storage .form-input').value = '1024';
+        document.querySelector('#content-comms .form-select').value = 'inactive';
+        const extraCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
+        if (extraCbs.length >= 4) {
+            extraCbs.item(0).checked = false;
+            extraCbs.item(1).checked = true;
+            extraCbs.item(2).checked = true;
+            extraCbs.item(3).checked = false;
+        }
         
         usersData.forEach(userId => {
             const user = (this.users || []).find(u => u.id === userId);
