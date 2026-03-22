@@ -21502,13 +21502,14 @@
             this.advanced_edit_handler(); 
         });
 
-        // 👇 给弹窗里的“保存所有修改”按钮接上电线 (只需接一次！)
-        const saveBtn = document.getElementById('btn-save-user-edits');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                this.saveAllChanges(); // 点击时，执行保存逻辑
-            });
-        }
+        // 初始绑定区域
+// 找到弹窗面板里的那个蓝色“保存”按钮
+const saveBtn = document.querySelector('#userEditModal .panel-footer .btn-admin:last-child');
+if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+        this.saveAllChanges(); // 点击后运行保存逻辑
+    });
+}
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
