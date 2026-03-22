@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极简管理后台 - 单人编辑模式</title>
+    <style>
+        /* 基础风格：全局 15px */
+        body { background-color: rgb(241, 245, 249); margin: 0px; padding: 20px; font-size: 15px; }
+        .admin-panel-container { max-width: 1200px; margin: 0px auto; font-family: system-ui, -apple-system, sans-serif; color: rgb(30, 53, 87); }
+        .btn-admin { padding: 6px 15px; border-radius: 6px; border: 1px solid rgb(147, 197, 253); background: rgb(255, 255, 255); color: rgb(30, 53, 87); cursor: pointer; font-size: 15px; transition: 0.2s; display: flex; align-items: center; gap: 5px; height: 32px; box-sizing: border-box; }
+        .btn-admin:hover { background: rgb(239, 246, 255); border-color: rgb(59, 130, 246); }
+        .edit-panel-card { background: rgb(255, 255, 255); border: 2px solid rgb(147, 197, 253); border-radius: 12px; padding: 20px; box-shadow: rgba(0, 0, 0, 0.1) 0px 10px 15px -3px; }
+        .edit-panel-header { font-size: 15px; font-weight: 600; margin-bottom: 10px; padding-bottom: 12px; border-bottom: 2px solid rgb(241, 245, 249); color: rgb(30, 64, 175); display: flex; align-items: center; }
+        /* 模块组样式 */
+        .edit-group { margin-bottom: 10px; padding: 14px; background: rgb(248, 250, 252); border-radius: 8px; border: 1px solid rgb(226, 232, 240); transition: border-color 0.2s; }
+        .edit-group:hover { border-color: rgb(147, 197, 253); }
+        .edit-group-title { font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: rgb(51, 65, 85); font-size: 15px; }
+        .edit-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .form-select, .form-input { padding: 5px 12px; border: 1px solid rgb(203, 213, 225); border-radius: 6px; outline: none; font-size: 15px; box-sizing: border-box; height: 32px; }
+        .form-input:focus, .form-select:focus { border-color: rgb(59, 130, 246); box-shadow: rgba(59, 130, 246, 0.1) 0px 0px 0px 2px; }
+        .panel-footer { margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px; padding-top: 15px; border-top: 1px solid rgb(226, 232, 240); }
+        /* 辅助排版样式 */
+        .tooltip-icon { color: #60a5fa; cursor: help; font-size: 12px; margin-left: 2px; vertical-align: super; }
+        .content-box { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+        .sub-label-normal { font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); display: block; } 
+        .fake-multiselect { height: 32px; background-color: #fff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .fake-multiselect:hover { border-color: rgb(147, 197, 253); }
+        /* 右侧信息面板专用类 */
+        .info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 15px; }
+        .info-label { color: #475569; }
+        .info-value { color: #0f172a; font-weight: 500; }
+        .status-on { color: #10b981; font-weight: 500; } /* 开启状态 绿色 */
+        .status-off { color: #94a3b8; font-weight: 400; } /* 关闭状态 灰色 */
+        .info-section-title { font-size: 15px; font-weight: 600; color: #64748b; margin: 16px 0 10px 0; }
+        /* 用户选择器样式 */
+        .user-selector-panel { background: rgb(255, 255, 255); border: 2px solid rgb(147, 197, 253); border-radius: 12px; padding: 20px; box-shadow: rgba(0, 0, 0, 0.1) 0px 10px 15px -3px; margin-bottom: 20px; }
+        .user-selector-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; color: rgb(30, 64, 175); display: flex; align-items: center; gap: 8px; }
+        .user-search-box { display: flex; gap: 12px; margin-bottom: 15px; }
+        .user-search-input { padding: 8px 12px; border: 1px solid rgb(203, 213, 225); border-radius: 6px; outline: none; font-size: 15px; flex: 1; height: 32px; box-sizing: border-box; }
+        .user-search-input:focus { border-color: rgb(59, 130, 246); box-shadow: rgba(59, 130, 246, 0.1) 0px 0px 0px 2px; }
+        .user-list-container { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; border: 1px solid rgb(226, 232, 240); border-radius: 8px; padding: 10px; background: rgb(248, 250, 252); }
+        .user-list-item { padding: 10px 12px; background: white; border: 1px solid rgb(226, 232, 240); border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+        .user-list-item:hover { background: rgb(239, 246, 255); border-color: rgb(147, 197, 253); }
+        .user-list-item.selected { background: rgb(219, 234, 254); border-color: rgb(59, 130, 246); }
+        .user-avatar { width: 28px; height: 28px; border-radius: 50%; background: rgb(147, 197, 253); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; flex-shrink: 0; }
+        .user-item-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+        .user-item-name { font-weight: 500; color: #0f172a; font-size: 14px; }
+        .user-item-status { font-size: 13px; color: #64748b; }
+        .user-item-checkbox { width: 18px; height: 18px; cursor: pointer; }
+        .empty-state { padding: 20px; text-align: center; color: #64748b; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="admin-panel-container">
+    
+    <!-- 用户选择器面板 -->
+    <div class="user-selector-panel">
+        <div class="user-selector-title">
+            👥 选择要编辑的用户
+        </div>
+        
+        <div class="user-search-box">
+            <input type="text" class="user-search-input" id="userSearchInput" placeholder="搜索用户名、邮箱或ID...">
+            <button class="btn-admin" onclick="clearUserSearch()">清空</button>
+        </div>
+        
+        <div class="user-list-container" id="userListContainer">
+            <!-- 用户列表将动态插入此处 -->
+        </div>
+    </div>
+
+    <!-- 原有编辑面板 -->
+    <div class="edit-panel-card" style="width: auto; max-width: 950px;">
+        <div class="edit-panel-header">
+            [ 编辑 ] 
+            <span style="font-size: 15px; font-weight: normal; color: #64748b; margin-left: 12px;">(注：单人操作显示 [ 编辑 ]，多人同时操作显示 [ 批量编辑 ])</span>
+        </div>
+
+        <div style="display: flex; gap: 24px; margin-top: 15px;">
+            <div style="flex: 1.6; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">⚙️ 用户编辑面板</div>
+
+                <div class="edit-group">
+                    <div class="edit-group-title">
+                        <input type="checkbox" checked> 
+                        <span>账户状态<sup class="tooltip-icon" title="禁用后该用户将无法登录系统">ⓘ</sup></span>
+                    </div>
+                    <div class="edit-controls">
+                        <select class="form-select" style="width: 100px;">
+                            <option value="active" selected>启用</option>
+                            <option value="inactive">禁用</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="edit-group">
+                    <div class="edit-group-title">
+                        <input type="checkbox" checked> 
+                        <span>存储空间配置<sup class="tooltip-icon" title="设置用户可使用的存储空间上限">ⓘ</sup></span>
+                    </div>
+                    <div class="edit-controls">
+                        <input type="number" class="form-input" value="2048" style="width: 100px;">
+                        <span style="color: #475569; font-size: 15px;">MB</span>
+                    </div>
+                </div>
+
+                <div class="edit-group">
+                    <div class="edit-group-title">
+                        <input type="checkbox" checked> 
+                        <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后添加">ⓘ</sup></span>
+                    </div>
+                    <div class="content-box" style="margin-top: 0;">
+                        <div class="edit-controls">
+                            <div class="form-input fake-multiselect" style="width: 140px;">
+                                <span style="color: #0f172a; font-weight: 500;">group_dev</span> 
+                                <span style="font-size: 12px; color: #64748b;">▼</span>
+                            </div>
+                            <button class="btn-admin">加入</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="edit-group">
+                    <div class="edit-group-title">
+                        <input type="checkbox" checked> 
+                        <span>【通信权限设置】</span>
+                    </div>
+                    <div class="content-box">
+                        <div style="display: flex; align-items: center;">
+                            <span class="sub-label-normal" style="width: 205px;">允许主动与所有用户通信<sup class="tooltip-icon" title="勾选后用户可与系统内任何用户通信">ⓘ</sup>：</span>
+                            <div class="edit-controls">
+                                <select class="form-select" style="width: 100px;">
+                                    <option value="inactive" selected>禁用</option>
+                                    <option value="active">启用</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center;">
+                            <span class="sub-label-normal" style="width: 205px;">允许主动与这些组通信<sup class="tooltip-icon" title="设定该用户只能与指定的组进行通信">ⓘ</sup>：</span>
+                            <div class="edit-controls">
+                                <div class="form-input fake-multiselect" style="width: 140px;">
+                                    <span></span>
+                                    <span style="font-size: 12px; color: #64748b;">▼</span>
+                                </div>
+                                <button class="btn-admin">添加</button>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center;">
+                            <span class="sub-label-normal" style="width: 205px;">允许主动与这些用户通信<sup class="tooltip-icon" title="设定该用户只能与指定的用户进行通信">ⓘ</sup>：</span>
+                            <div class="edit-controls">
+                                <div class="form-input fake-multiselect" style="width: 140px;">
+                                    <span></span>
+                                    <span style="font-size: 12px; color: #64748b;">▼</span>
+                                </div>
+                                <button class="btn-admin">添加</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="edit-group">
+                    <div class="edit-group-title">
+                        <input type="checkbox" checked> 
+                        <span>【附加权限管理】</span>
+                    </div>
+                    <div class="content-box" style="flex-direction: row; flex-wrap: wrap; gap: 15px 30px;">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                            <input type="checkbox"> 
+                            <span>允许管理所有用户的网盘<sup class="tooltip-icon" title="拥有此权限的用户可访问和管理所有文件">ⓘ</sup></span>
+                        </label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                            <input type="checkbox" checked> 
+                            <span>允许添加好友<sup class="tooltip-icon" title="禁用后用户无法向其他用户发送好友请求">ⓘ</sup></span>
+                        </label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                            <input type="checkbox" checked> 
+                            <span>允许创建群组<sup class="tooltip-icon" title="禁用后用户无法创建新的群组">ⓘ</sup></span>
+                        </label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 400; color: rgb(51, 65, 85); width: 45%;">
+                            <input type="checkbox"> 
+                            <span>允许邀请用户<sup class="tooltip-icon" title="禁用后用户无法邀请其他用户加入群组">ⓘ</sup></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">👤 当前编辑的用户</div>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 16px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
+                    <div style="font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 16px;">
+                        <span id="currentUserDisplay">user_test_01</span>
+                    </div>
+                    <div class="info-row"><span class="info-label">当前状态：</span> <span class="status-on">启用</span></div>
+                    <div class="info-row"><span class="info-label">当前存储：</span> <span class="info-value">2048 MB</span></div>
+                    <div class="info-row"><span class="info-label">当前所属组：</span> <span class="info-value">开发组, 前端组</span></div>
+                    <div class="info-section-title">【通信权限】</div>
+                    <div style="padding-left: 8px;">
+                        <div class="info-row"><span class="info-label">全局通信：</span> <span class="status-off">关闭</span></div>
+                        <div class="info-row"><span class="info-label">允许的组：</span> <span class="info-value">group_backend</span></div>
+                        <div class="info-row"><span class="info-label">允许的人：</span> <span class="info-value">user_admin_01</span></div>
+                    </div>
+                    <div class="info-section-title">【附加权限】</div>
+                    <div style="padding-left: 8px;">
+                        <div class="info-row"><span class="info-label">添加好友：</span> <span class="status-on">开启</span></div>
+                        <div class="info-row"><span class="info-label">创建群组：</span> <span class="status-on">开启</span></div>
+                        <div class="info-row"><span class="info-label">管理网盘：</span> <span class="status-off">关闭</span></div>
+                        <div class="info-row"><span class="info-label">邀请用户：</span> <span class="status-off">关闭</span></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="panel-footer">
+            <button class="btn-admin" style="background: #f1f5f9; border-color: #cbd5e1; color: #475569;">
+                ↺ 重置所有修改
+            </button>
+            <button class="btn-admin" style="background: #3b82f6; color: white; border-color: #2563eb; font-weight: 500;">
+                💾 保存所有修改
+            </button>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+// 模拟用户数据
+const mockUsers = [
+    { id: 1, name: 'user_test_01', email: 'user1@example.com', status: 'active' },
+    { id: 2, name: 'user_admin_01', email: 'admin@example.com', status: 'active' },
+    { id: 3, name: 'user_dev_02', email: 'dev@example.com', status: 'active' },
+    { id: 4, name: 'user_frontend_03', email: 'frontend@example.com', status: 'inactive' },
+    { id: 5, name: 'user_backend_04', email: 'backend@example.com', status: 'active' },
+    { id: 6, name: 'user_test_05', email: 'test5@example.com', status: 'active' },
+    { id: 7, name: 'user_guest_06', email: 'guest@example.com', status: 'inactive' },
+    { id: 8, name: 'user_intern_07', email: 'intern@example.com', status: 'active' },
+];
+
+let selectedUser = null;
+
+// 初始化用户列表
+function initializeUserList() {
+    renderUserList(mockUsers);
+}
+
+// 渲染用户列表
+function renderUserList(users) {
+    const container = document.getElementById('userListContainer');
+    
+    if (users.length === 0) {
+        container.innerHTML = '<div class="empty-state">未找到匹配的用户</div>';
+        return;
+    }
+    
+    container.innerHTML = users.map(user => `
+        <div class="user-list-item ${selectedUser?.id === user.id ? 'selected' : ''}" onclick="selectUser(${user.id})">
+            <div class="user-avatar">${user.name.charAt(0).toUpperCase()}</div>
+            <div class="user-item-info">
+                <div class="user-item-name">${user.name}</div>
+                <div class="user-item-status">${user.email} • ${user.status === 'active' ? '启用' : '禁用'}</div>
+            </div>
+            <input type="checkbox" class="user-item-checkbox" ${selectedUser?.id === user.id ? 'checked' : ''} onclick="event.stopPropagation()">
+        </div>
+    `).join('');
+}
+
+// 选择用户
+function selectUser(userId) {
+    selectedUser = mockUsers.find(u => u.id === userId);
+    if (selectedUser) {
+        document.getElementById('currentUserDisplay').textContent = selectedUser.name;
+        renderUserList(mockUsers.filter(u => {
+            const searchValue = document.getElementById('userSearchInput').value.toLowerCase();
+            return !searchValue || 
+                   u.name.toLowerCase().includes(searchValue) || 
+                   u.email.toLowerCase().includes(searchValue);
+        }));
+    }
+}
+
+// 搜索用户
+document.getElementById('userSearchInput').addEventListener('input', function(e) {
+    const searchValue = e.target.value.toLowerCase();
+    const filtered = mockUsers.filter(user => 
+        user.name.toLowerCase().includes(searchValue) || 
+        user.email.toLowerCase().includes(searchValue)
+    );
+    renderUserList(filtered);
+});
+
+// 清空搜索
+function clearUserSearch() {
+    document.getElementById('userSearchInput').value = '';
+    renderUserList(mockUsers);
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initializeUserList();
+    selectUser(1); // 默认选择第一个用户
+});
+</script>
+
+</body>
+</html>
