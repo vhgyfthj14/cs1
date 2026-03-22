@@ -21983,8 +21983,8 @@ advanced_edit_handler() {
         // 批量模式：传整个数组
         this.openUserEditor('batch', selectedUsers);
     } else if (selectedUsers.length === 1) {
-        // 单人模式：传单个 ID (这里必须有)
-        this.openUserEditor('single', selectedUsers); 
+        // 使用 .at(0) 代替方括号，防止被你的编辑器吞掉
+        this.openUserEditor('single', selectedUsers.at(0)); 
     } else {
         alert("⚠️ 请先勾选需要编辑的用户！");
     }
@@ -22108,14 +22108,14 @@ async saveAllChanges() {
             allowed_users: getCheckedValues('dropdown-comm-users')
         };
     }
-    if (document.getElementById('chk-extra').checked) {
+   if (document.getElementById('chk-extra').checked) {
         const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        // 这里必须有数字下标！
+        // 使用 .item() 代替方括号，完美绕过过滤 Bug！
         payload.modifications.extra_permissions = {
-            manage_drive: extraCheckboxes.checked, 
-            add_friends: extraCheckboxes.checked,
-            create_group: extraCheckboxes.checked, 
-            invite_user: extraCheckboxes.checked   
+            manage_drive: extraCheckboxes.item(0).checked, 
+            add_friends: extraCheckboxes.item(1).checked,
+            create_group: extraCheckboxes.item(2).checked, 
+            invite_user: extraCheckboxes.item(3).checked   
         };
     }
 
