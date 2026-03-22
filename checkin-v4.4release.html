@@ -22155,6 +22155,18 @@ closeUserEditor() {
     const modal = document.getElementById('userEditModal');
     if (modal) modal.classList.remove('active');
 }
+                // 更新删除按钮状态
+                _update_delete_button() {
+                    if (this.selected_user_ids.size > 0) {
+                        this.e_btn_edit.disabled = false;
+                        this.e_btn_delete.disabled = false;
+                        this.e_btn_editPanel.disabled = false;
+                    } else {
+                        this.e_btn_edit.disabled = true;
+                        this.e_btn_delete.disabled = true;
+                        this.e_btn_editPanel.disabled = true;
+                    }
+                }
                 // 批量删除用户
                 batch_delete_users() {
                     const count = this.selected_user_ids.size;
