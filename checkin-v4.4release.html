@@ -21490,21 +21490,25 @@
                     this.e_btn_editPanel = this.container.querySelector(":scope button.settings-btn-EditPanel");
                     this.e_delete_status = this.container.querySelector(":scope span.settings-delete-status");
                     // 3. 初始绑定：接通点击信号
-                    this.e_btn_edit.addEventListener("click", (event) => {
-                        this.batch_edit_users();
-                    });
-                    this.e_btn_delete.addEventListener("click", (event) => {
-                        this.batch_delete_users();
-                    });
-                    this.e_btn_editPanel.addEventListener("click", (event) => {
-                    this.advanced_edit_handler(); 
-                    });
-                    const saveBtn = document.querySelector('#userEditModal .panel-footer .btn-admin:last-child');
-                    if (saveBtn) {
-                    saveBtn.addEventListener('click', () => {
-                    this.saveAllChanges(); // 点击后运行保存逻辑
-                    });
-                    }
+        this.e_btn_edit.addEventListener("click", (event) => {
+            this.batch_edit_users();
+        });
+        
+        this.e_btn_delete.addEventListener("click", (event) => {
+            this.batch_delete_users();
+        });
+        
+        this.e_btn_editPanel.addEventListener("click", (event) => {
+            this.advanced_edit_handler(); 
+        });
+
+        // 👇 给弹窗里的“保存所有修改”按钮接上电线 (只需接一次！)
+        const saveBtn = document.getElementById('btn-save-user-edits');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                this.saveAllChanges(); // 点击时，执行保存逻辑
+            });
+        }
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
