@@ -21981,77 +21981,20 @@ if (saveBtn) {
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
-// 1. 核心触发器：点击【编辑面板】按钮时运行
-advanced_edit_handler() {
+// 1. 核心触发器：改为 async 异步，等待数据加载
+async advanced_edit_handler() {
     const selectedUsers = Array.from(this.selected_user_ids || []);
     if (selectedUsers.length > 1) {
-        this.openUserEditor('batch', selectedUsers);
+        await this.openUserEditor('batch', selectedUsers);
     } else if (selectedUsers.length === 1) {
-        // 使用 .at(0) 避开方括号，获取第一个选中的 ID
-        this.openUserEditor('single', selectedUsers.at(0)); 
+        await this.openUserEditor('single', selectedUsers.at(0)); 
     } else {
         alert("⚠️ 请先勾选需要编辑的用户！");
     }
 }
 
-// 2. 渲染真实的组和用户到下拉框中
-renderDropdownData() {
-    // 增加兼容性：自动适配你框架里的变量名 (groups / users)
-    const rawGroups = this.groups || this.group_list || this.teams || [];
-    const rawUsers = this.users || this.user_list || [];
-    
-    const allGroups = rawGroups.map(t => t.gid || t.name); 
-    const allUsers = rawUsers.map(u => u.uid || u.username);
-    
-    const generateHtml = (items) => items.map(item => `
-        <label class="search-select-item">
-            <input type="checkbox" value="${item}">
-            <span>${item}</span>
-        </label>
-    `).join('');
-    
-    const dt = document.getElementById('dropdown-teams');
-    if(dt) dt.innerHTML = generateHtml(allGroups);
-    const dcg = document.getElementById('dropdown-comm-groups');
-    if(dcg) dcg.innerHTML = generateHtml(allGroups);
-    const dcu = document.getElementById('dropdown-comm-users');
-    if(dcu) dcu.innerHTML = generateHtml(allUsers);
-
-    // 【新增】：监听复选框点击，一点击就让输入框显示“已选 XXX”
-    ['dropdown-teams', 'dropdown-comm-groups', 'dropdown-comm-users'].forEach(id => {
-        const dropdown = document.getElementById(id);
-        if (dropdown) {
-            dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                cb.addEventListener('change', () => this.updateDropdownDisplay(id));
-            });
-        }
-    });
-}
-
-// 2.5 【新增核心视觉功能】：让下拉框的“已选项”被你看见！
-updateDropdownDisplay(dropdownId) {
-    const container = document.getElementById(dropdownId);
-    if (!container) return;
-    const input = container.parentElement.querySelector('.search-select-input');
-    if (!input) return;
-
-    const checkedBoxes = container.querySelectorAll('input[type="checkbox"]:checked');
-    const vals = Array.from(checkedBoxes).map(cb => cb.value);
-    
-    if (vals.length > 0) {
-        // 数据一旦同步，立刻显示在输入框上
-        input.placeholder = `✅ 已选: ` + vals.join(', ');
-        input.style.backgroundColor = "#f0f9ff"; // 变成淡淡的蓝色，确认感拉满
-    } else {
-        input.style.backgroundColor = "";
-        if (dropdownId.includes('teams')) input.placeholder = "搜索组并勾选...";
-        else if (dropdownId.includes('groups')) input.placeholder = "搜索允许的组...";
-        else input.placeholder = "搜索允许的用户...";
-    }
-}
-
-// 3. 面板显示函数：包含数据回填和视觉刷新
-openUserEditor(mode, usersData) {
+// 2. 面板显示函数：【核心修复】实时从服务器底层拉取真实数据！
+async openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
     if (!modal) return;    
     
@@ -22084,12 +22027,33 @@ openUserEditor(mode, usersData) {
         viewBatch.style.display = 'none';
         
         const targetUid = Array.isArray(usersData) ? usersData.at(0) : usersData;
-        const user = (this.users || this.user_list || []).find(u => u.uid === targetUid || u.id === targetUid);
+        
+        // 视觉提示：正在拉取底层数据
+        document.getElementById('single-username').innerText = `📡 正在连接服务器读取真实数据...`;
+        
+        // 1. 先用 "==" (双等号) 解决类型不匹配的 Bug，保底拿个名字
+        let user = (this.users || this.user_list || []).find(u => u.uid == targetUid || u.id == targetUid) || { uid: targetUid };
+        
+        // ==========================================
+        // 2. 【核心大杀器】：绕过缓存，直接向 worker.js 索要真实详细数据！
+        // ==========================================
+        try {
+            const res = await fetch(`/admin/api/user/${targetUid}`);
+            if (res.ok) {
+                const fetchedData = await res.json();
+                // 智能解包后端数据
+                const realUser = fetchedData.data || fetchedData.user || fetchedData; 
+                // 将真实的底层权限覆盖上去，实现 100% 数据穿透同步
+                user = { ...user, ...realUser }; 
+            }
+        } catch (err) {
+            console.warn("实时读取底层数据失败，可能网络波动", err);
+        }
         
         if (user) {
-            document.getElementById('single-username').innerText = `👤 ${user.uid || user.username}`;
+            document.getElementById('single-username').innerText = `👤 ${user.uid || user.username || targetUid}`;
             
-            // --- 右侧显示真实字段 ---
+            // --- 右侧显示真实底层字段 (精准对位) ---
             document.getElementById('r-status').innerText = user.disabled ? '禁用' : '启用';
             document.getElementById('r-status').className = user.disabled ? 'status-off' : 'status-on';
             document.getElementById('r-storage').innerText = `${user.free_space || 0} MB`;
@@ -22111,7 +22075,7 @@ openUserEditor(mode, usersData) {
             setPerm('r-perm-group', user.can_create_group);
             setPerm('r-perm-invite', user.can_invite_to_group);
 
-            // --- 左侧表单自动对齐当前数据 ---
+            // --- 左侧表单自动对齐底层数据 ---
             document.querySelector('#content-status .form-select').value = user.disabled ? 'inactive' : 'active';
             document.querySelector('#content-storage .form-input').value = user.free_space || 1024;
             document.querySelector('#content-comms .form-select').value = user.contact_any ? 'active' : 'inactive';
@@ -22120,8 +22084,8 @@ openUserEditor(mode, usersData) {
                 if (!valuesArray) return;
                 const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
                 cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
-                // 【核心修复】：打完勾后，立刻刷新输入框视觉，让你看见！
-                this.updateDropdownDisplay(dropdownId); 
+                // 打完勾后立刻刷新视觉
+                if(typeof this.updateDropdownDisplay === 'function') this.updateDropdownDisplay(dropdownId); 
             };
             
             autoCheckValues('dropdown-teams', user.groups);
@@ -22146,7 +22110,7 @@ openUserEditor(mode, usersData) {
         viewBatch.innerHTML = ''; 
         
         usersData.forEach(uid => {
-            const u = (this.users || this.user_list || []).find(user => user.uid === uid || user.id === uid);
+            const u = (this.users || this.user_list || []).find(user => user.uid == uid || user.id == uid);
             const div = document.createElement('div');
             div.className = 'batch-user-item';
             div.innerText = `👤 ${u ? (u.uid || u.username) : uid}`;
@@ -22155,13 +22119,13 @@ openUserEditor(mode, usersData) {
         groups.forEach(g => this.setGroupState(g, true));
         this.setGroupState('status', false); 
         
-        // 批量模式清空显示
-        this.updateDropdownDisplay('dropdown-teams');
-        this.updateDropdownDisplay('dropdown-comm-groups');
-        this.updateDropdownDisplay('dropdown-comm-users');
+        if(typeof this.updateDropdownDisplay === 'function') {
+            this.updateDropdownDisplay('dropdown-teams');
+            this.updateDropdownDisplay('dropdown-comm-groups');
+            this.updateDropdownDisplay('dropdown-comm-users');
+        }
     }
 }
-
 // 4. 保存逻辑：发送请求并刷新底层表格
 async saveAllChanges() { 
     const userIds = Array.from(this.selected_user_ids || []);
