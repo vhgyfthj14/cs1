@@ -21996,8 +21996,9 @@ advanced_edit_handler() {
 
 // 2. 渲染真实的组和用户到下拉框中
 renderDropdownData() {
-    const allGroups = (this.teams || []).map(t => t.name); 
-    const allUsers = (this.users || []).map(u => u.username);
+    // 匹配 worker.js 里的字段: 组名用 gid，用户名用 uid 或 username
+    const allGroups = (this.teams || []).map(t => t.gid || t.name); 
+    const allUsers = (this.users || []).map(u => u.uid || u.username);
     const generateHtml = (items) => items.map(item => `
         <label class="search-select-item">
             <input type="checkbox" value="${item}">
@@ -22013,21 +22014,23 @@ renderDropdownData() {
     if(dcu) dcu.innerHTML = generateHtml(allUsers);
 }
 
-// 3. 面板显示函数：包含【数据回填】+【表单重置】+【按钮绑定】
+// 3. 面板显示函数：包含数据回填和真实字段对接
 openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
     if (!modal) return;    
     
-    // 每次打开都重新渲染下拉列表并清理搜索框，防止数据残留
     this.renderDropdownData(); 
     document.querySelectorAll('.search-select-input').forEach(input => input.value = '');
     
     modal.classList.add('active');
 
-    // 【强行绑定保存按钮】解决点击没反应的问题
-    const saveBtn = document.getElementById('btn-save-user-edits');
+    // 绑定保存按钮 (你之前写对的那个写法)
+    const saveBtn = document.querySelector('#userEditModal .panel-footer .btn-admin:last-child');
     if (saveBtn) {
-        saveBtn.onclick = () => this.saveAllChanges();
+        saveBtn.replaceWith(saveBtn.cloneNode(true)); // 防重复点击
+        document.querySelector('#userEditModal .panel-footer .btn-admin:last-child').addEventListener('click', () => {
+            this.saveAllChanges();
+        });
     }
 
     const titleText = document.getElementById('editor-title-text');
@@ -22042,27 +22045,55 @@ openUserEditor(mode, usersData) {
         viewSingle.style.display = 'block';
         viewBatch.style.display = 'none';
         
-        // 查找真实的用户对象
-        const user = (this.users || []).find(u => u.id === usersData);
+        // 使用 uid 去查找真实对象
+        const targetUid = Array.isArray(usersData) ? usersData.at(0) : usersData;
+        const user = (this.users || []).find(u => u.uid === targetUid || u.id === targetUid);
+        
         if (user) {
-            document.getElementById('single-username').innerText = `👤 ${user.username} (ID: ${user.id})`;
+            document.getElementById('single-username').innerText = `👤 ${user.uid || user.username}`;
             
-            // --- 右侧显示：回填真实状态 ---
-            document.getElementById('r-status').innerText = user.status === 'active' ? '启用' : '禁用';
-            document.getElementById('r-storage').innerText = `${user.storage_quota || 0} MB`;
-            document.getElementById('r-teams').innerText = (user.join_groups || []).join(', ') || '无';
+            // --- 右侧显示：回填 worker.js 的真实字段 ---
+            document.getElementById('r-status').innerText = user.disabled ? '禁用' : '启用';
+            document.getElementById('r-status').className = user.disabled ? 'status-off' : 'status-on';
+            document.getElementById('r-storage').innerText = `${user.free_space || 0} MB`;
+            document.getElementById('r-teams').innerText = (user.groups || []).join(', ') || '无';
 
-            // --- 左侧表单：自动对齐用户当前的数据 (解决你说的取消后还是上次页面的问题) ---
-            document.querySelector('#content-status .form-select').value = user.status || 'active';
-            document.querySelector('#content-storage .form-input').value = user.storage_quota || 1024;
+            const commGlobal = user.contact_any;
+            document.getElementById('r-comm-global').innerText = commGlobal ? '开启' : '关闭';
+            document.getElementById('r-comm-global').className = commGlobal ? 'status-on' : 'status-off';
+            document.getElementById('r-comm-groups').innerText = (user.contact_groups || []).join(', ') || '无';
+            document.getElementById('r-comm-users').innerText = (user.contact_users || []).join(', ') || '无';
+
+            const setPerm = (id, val) => {
+                const el = document.getElementById(id);
+                el.innerText = val ? '开启' : '关闭';
+                el.className = val ? 'status-on' : 'status-off';
+            };
+            setPerm('r-perm-drive', user.manage_drive);
+            setPerm('r-perm-friend', user.can_add_friend);
+            setPerm('r-perm-group', user.can_create_group);
+            setPerm('r-perm-invite', user.can_invite_to_group);
+
+            // --- 左侧表单自动对齐当前数据 ---
+            document.querySelector('#content-status .form-select').value = user.disabled ? 'inactive' : 'active';
+            document.querySelector('#content-storage .form-input').value = user.free_space || 1024;
+            document.querySelector('#content-comms .form-select').value = user.contact_any ? 'active' : 'inactive';
             
-            // 附加权限复选框自动同步
+            const autoCheckValues = (dropdownId, valuesArray) => {
+                if (!valuesArray) return;
+                const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
+                cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
+            };
+            autoCheckValues('dropdown-teams', user.groups);
+            autoCheckValues('dropdown-comm-groups', user.contact_groups);
+            autoCheckValues('dropdown-comm-users', user.contact_users);
+            
             const exCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
             if (exCbs.length >= 4) {
-                exCbs.item(0).checked = !!user.extra_permissions?.manage_drive;
-                exCbs.item(1).checked = !!user.extra_permissions?.add_friends;
-                exCbs.item(2).checked = !!user.extra_permissions?.create_group;
-                exCbs.item(3).checked = !!user.extra_permissions?.invite_user;
+                exCbs.item(0).checked = !!user.manage_drive;
+                exCbs.item(1).checked = !!user.can_add_friend;
+                exCbs.item(2).checked = !!user.can_create_group;
+                exCbs.item(3).checked = !!user.can_invite_to_group;
             }
         }
         groups.forEach(g => this.setGroupState(g, true));
@@ -22074,19 +22105,19 @@ openUserEditor(mode, usersData) {
         viewBatch.style.display = 'flex';
         viewBatch.innerHTML = ''; 
         
-        usersData.forEach(userId => {
-            const user = (this.users || []).find(u => u.id === userId);
-            const userDiv = document.createElement('div');
-            userDiv.className = 'batch-user-item';
-            userDiv.innerText = `👤 ${user ? user.username : userId}`;
-            viewBatch.appendChild(userDiv);
+        usersData.forEach(uid => {
+            const u = (this.users || []).find(user => user.uid === uid || user.id === uid);
+            const div = document.createElement('div');
+            div.className = 'batch-user-item';
+            div.innerText = `👤 ${u ? (u.uid || u.username) : uid}`;
+            viewBatch.appendChild(div);
         });
         groups.forEach(g => this.setGroupState(g, true));
         this.setGroupState('status', false); 
     }
 }
 
-// 4. 【接入真接口】：打包数据发给后端
+// 4. 保存逻辑：原生 fetch 发送，对接刚加的 /admin/api/users/batch
 async saveAllChanges() { 
     const userIds = Array.from(this.selected_user_ids || []);
     if (userIds.length === 0) return;
@@ -22097,64 +22128,63 @@ async saveAllChanges() {
     };
 
     const getCheckedValues = (dropdownId) => {
-        const checkboxes = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]:checked`);
-        return Array.from(checkboxes).map(cb => cb.value);
+        const list = document.getElementById(dropdownId);
+        if (!list) return [];
+        return Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
     };
 
-    if (document.getElementById('chk-status').checked) {
+    if (document.getElementById('chk-status') && document.getElementById('chk-status').checked) {
         payload.modifications.status = document.querySelector('#content-status .form-select').value;
     }
-    if (document.getElementById('chk-storage').checked) {
+    if (document.getElementById('chk-storage') && document.getElementById('chk-storage').checked) {
         payload.modifications.storage_quota = parseInt(document.querySelector('#content-storage .form-input').value, 10);
     }
-    if (document.getElementById('chk-teams').checked) {
+    if (document.getElementById('chk-teams') && document.getElementById('chk-teams').checked) {
         payload.modifications.join_groups = getCheckedValues('dropdown-teams');
     }
-    if (document.getElementById('chk-comms').checked) {
+    if (document.getElementById('chk-comms') && document.getElementById('chk-comms').checked) {
         payload.modifications.comm_settings = {
             global_comm: document.querySelector('#content-comms .form-select').value,
             allowed_groups: getCheckedValues('dropdown-comm-groups'),
             allowed_users: getCheckedValues('dropdown-comm-users')
         };
     }
-    if (document.getElementById('chk-extra').checked) {
-        const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        payload.modifications.extra_permissions = {
-            manage_drive: extraCheckboxes.item(0).checked, 
-            add_friends: extraCheckboxes.item(1).checked,
-            create_group: extraCheckboxes.item(2).checked, 
-            invite_user: extraCheckboxes.item(3).checked   
-        };
+    if (document.getElementById('chk-extra') && document.getElementById('chk-extra').checked) {
+        const ex = document.querySelectorAll('#content-extra input[type="checkbox"]');
+        if (ex && ex.length >= 4) {
+            payload.modifications.extra_permissions = {
+                manage_drive: ex.item(0).checked, 
+                add_friends: ex.item(1).checked,
+                create_group: ex.item(2).checked, 
+                invite_user: ex.item(3).checked   
+            };
+        }
     }
 
-    console.log("即将发往后端的数据：", payload);
-
-    // 👇 就是下面这里改成了原生的 fetch 请求 👇
     try {
-        const res = await fetch('/api/admin/users/batch', {
+        // 【关键】：发送到规范的 Checkin 系统内部接口 
+        const res = await fetch('/admin/api/users/batch', {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         
-        // 解析后端返回的 JSON 数据
         const response = await res.json();
 
         if (response && response.success) {
-            MessageMark.success(`成功配置！已修改 ${userIds.length} 个用户。`);
+            MessageMark.success(`成功！已修改 ${response.count || userIds.length} 个用户的配置。`);
             this.closeUserEditor();
             this.selected_user_ids.clear();
-            this._update_delete_button();
-            await this._load_users_from_server();             
-            this.render();
+            if(this._update_delete_button) this._update_delete_button();
+            
+            // 自动刷新数据列表
+            if (typeof this._load_users_from_server === 'function') await this._load_users_from_server();
+            if (typeof this.render === 'function') this.render();
         } else {
             MessageMark.error('保存失败: ' + (response.error || '未知错误'));
         }
     } catch (error) {
-        console.error("保存崩溃详细信息:", error);
-        // 这里把真正的报错原因打印到屏幕上，方便排查
+        console.error("提交出错:", error);
         MessageMark.error('网络请求发送失败: ' + error.message);
     }
 }
