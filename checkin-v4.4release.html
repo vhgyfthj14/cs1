@@ -21996,9 +21996,13 @@ advanced_edit_handler() {
 
 // 2. 渲染真实的组和用户到下拉框中
 renderDropdownData() {
-    // 匹配 worker.js 里的字段: 组名用 gid，用户名用 uid 或 username
-    const allGroups = (this.teams || []).map(t => t.gid || t.name); 
-    const allUsers = (this.users || []).map(u => u.uid || u.username);
+    // 增加兼容性：自动适配你框架里的变量名 (groups / users)
+    const rawGroups = this.groups || this.group_list || this.teams || [];
+    const rawUsers = this.users || this.user_list || [];
+    
+    const allGroups = rawGroups.map(t => t.gid || t.name); 
+    const allUsers = rawUsers.map(u => u.uid || u.username);
+    
     const generateHtml = (items) => items.map(item => `
         <label class="search-select-item">
             <input type="checkbox" value="${item}">
@@ -22012,22 +22016,56 @@ renderDropdownData() {
     if(dcg) dcg.innerHTML = generateHtml(allGroups);
     const dcu = document.getElementById('dropdown-comm-users');
     if(dcu) dcu.innerHTML = generateHtml(allUsers);
+
+    // 【新增】：监听复选框点击，一点击就让输入框显示“已选 XXX”
+    ['dropdown-teams', 'dropdown-comm-groups', 'dropdown-comm-users'].forEach(id => {
+        const dropdown = document.getElementById(id);
+        if (dropdown) {
+            dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.addEventListener('change', () => this.updateDropdownDisplay(id));
+            });
+        }
+    });
 }
 
-// 3. 面板显示函数：包含数据回填和真实字段对接
+// 2.5 【新增核心视觉功能】：让下拉框的“已选项”被你看见！
+updateDropdownDisplay(dropdownId) {
+    const container = document.getElementById(dropdownId);
+    if (!container) return;
+    const input = container.parentElement.querySelector('.search-select-input');
+    if (!input) return;
+
+    const checkedBoxes = container.querySelectorAll('input[type="checkbox"]:checked');
+    const vals = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (vals.length > 0) {
+        // 数据一旦同步，立刻显示在输入框上
+        input.placeholder = `✅ 已选: ` + vals.join(', ');
+        input.style.backgroundColor = "#f0f9ff"; // 变成淡淡的蓝色，确认感拉满
+    } else {
+        input.style.backgroundColor = "";
+        if (dropdownId.includes('teams')) input.placeholder = "搜索组并勾选...";
+        else if (dropdownId.includes('groups')) input.placeholder = "搜索允许的组...";
+        else input.placeholder = "搜索允许的用户...";
+    }
+}
+
+// 3. 面板显示函数：包含数据回填和视觉刷新
 openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
     if (!modal) return;    
     
     this.renderDropdownData(); 
-    document.querySelectorAll('.search-select-input').forEach(input => input.value = '');
+    document.querySelectorAll('.search-select-input').forEach(input => {
+        input.value = '';
+        input.style.backgroundColor = ''; 
+    });
     
     modal.classList.add('active');
 
-    // 绑定保存按钮 (你之前写对的那个写法)
     const saveBtn = document.querySelector('#userEditModal .panel-footer .btn-admin:last-child');
     if (saveBtn) {
-        saveBtn.replaceWith(saveBtn.cloneNode(true)); // 防重复点击
+        saveBtn.replaceWith(saveBtn.cloneNode(true)); 
         document.querySelector('#userEditModal .panel-footer .btn-admin:last-child').addEventListener('click', () => {
             this.saveAllChanges();
         });
@@ -22045,14 +22083,13 @@ openUserEditor(mode, usersData) {
         viewSingle.style.display = 'block';
         viewBatch.style.display = 'none';
         
-        // 使用 uid 去查找真实对象
         const targetUid = Array.isArray(usersData) ? usersData.at(0) : usersData;
-        const user = (this.users || []).find(u => u.uid === targetUid || u.id === targetUid);
+        const user = (this.users || this.user_list || []).find(u => u.uid === targetUid || u.id === targetUid);
         
         if (user) {
             document.getElementById('single-username').innerText = `👤 ${user.uid || user.username}`;
             
-            // --- 右侧显示：回填 worker.js 的真实字段 ---
+            // --- 右侧显示真实字段 ---
             document.getElementById('r-status').innerText = user.disabled ? '禁用' : '启用';
             document.getElementById('r-status').className = user.disabled ? 'status-off' : 'status-on';
             document.getElementById('r-storage').innerText = `${user.free_space || 0} MB`;
@@ -22083,7 +22120,10 @@ openUserEditor(mode, usersData) {
                 if (!valuesArray) return;
                 const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
                 cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
+                // 【核心修复】：打完勾后，立刻刷新输入框视觉，让你看见！
+                this.updateDropdownDisplay(dropdownId); 
             };
+            
             autoCheckValues('dropdown-teams', user.groups);
             autoCheckValues('dropdown-comm-groups', user.contact_groups);
             autoCheckValues('dropdown-comm-users', user.contact_users);
@@ -22106,7 +22146,7 @@ openUserEditor(mode, usersData) {
         viewBatch.innerHTML = ''; 
         
         usersData.forEach(uid => {
-            const u = (this.users || []).find(user => user.uid === uid || user.id === uid);
+            const u = (this.users || this.user_list || []).find(user => user.uid === uid || user.id === uid);
             const div = document.createElement('div');
             div.className = 'batch-user-item';
             div.innerText = `👤 ${u ? (u.uid || u.username) : uid}`;
@@ -22114,10 +22154,15 @@ openUserEditor(mode, usersData) {
         });
         groups.forEach(g => this.setGroupState(g, true));
         this.setGroupState('status', false); 
+        
+        // 批量模式清空显示
+        this.updateDropdownDisplay('dropdown-teams');
+        this.updateDropdownDisplay('dropdown-comm-groups');
+        this.updateDropdownDisplay('dropdown-comm-users');
     }
 }
 
-// 4. 保存逻辑：原生 fetch 发送，对接刚加的 /admin/api/users/batch
+// 4. 保存逻辑：发送请求并刷新底层表格
 async saveAllChanges() { 
     const userIds = Array.from(this.selected_user_ids || []);
     if (userIds.length === 0) return;
@@ -22162,7 +22207,6 @@ async saveAllChanges() {
     }
 
     try {
-        // 【关键】：发送到规范的 Checkin 系统内部接口 
         const res = await fetch('/admin/api/users/batch', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -22177,8 +22221,10 @@ async saveAllChanges() {
             this.selected_user_ids.clear();
             if(this._update_delete_button) this._update_delete_button();
             
-            // 自动刷新数据列表
-            if (typeof this._load_users_from_server === 'function') await this._load_users_from_server();
+            // 【核心修复】保存后自动刷新底层的用户表格！让你立刻看到变化！
+            if (typeof this.fetch_list === 'function') await this.fetch_list();
+            else if (typeof this._load_users_from_server === 'function') await this._load_users_from_server();
+            
             if (typeof this.render === 'function') this.render();
         } else {
             MessageMark.error('保存失败: ' + (response.error || '未知错误'));
@@ -22187,20 +22233,6 @@ async saveAllChanges() {
         console.error("提交出错:", error);
         MessageMark.error('网络请求发送失败: ' + error.message);
     }
-}
-
-// 5. 辅助与清理函数
-setGroupState(groupId, state) {
-    const chk = document.getElementById('chk-' + groupId);
-    if (chk) {
-        chk.checked = state;
-        if (typeof toggleGroupState === 'function') toggleGroupState(groupId);
-    }
-}
-
-closeUserEditor() {
-    const modal = document.getElementById('userEditModal');
-    if (modal) modal.classList.remove('active');
 }
                 // 更新删除按钮状态
                 _update_delete_button() {
