@@ -7398,7 +7398,125 @@
         }
     </style>
 
-</head>
+<style>
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    display: none;
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    border-radius: 8px;
+    width: 85%;
+    max-width: 700px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close:hover {
+    color: black;
+}
+#user-editor-form fieldset {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f9f9f9;
+}
+#user-editor-form legend {
+    padding: 0 10px;
+    font-weight: 600;
+    color: #333;
+}
+#user-editor-form .form-group {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+#user-editor-form .form-group label {
+    min-width: 150px;
+    font-weight: 500;
+}
+#user-editor-form .form-group input,
+#user-editor-form .form-group select {
+    flex: 1;
+    min-width: 150px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+#user-editor-form .form-group button {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.item-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    min-height: 40px;
+}
+.list-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #e3f2fd;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid #90caf9;
+}
+.list-item button {
+    background: none;
+    border: none;
+    color: #d32f2f;
+    cursor: pointer;
+}
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+}
+.form-actions button {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.form-actions button[type="submit"] {
+    background-color: #28a745;
+    color: white;
+}
+.form-actions button[type="button"] {
+    background-color: #6c757d;
+    color: white;
+}
+</style></head>
 <body class="">
 
 <!-- 网络错误通知条 -->
@@ -21497,10 +21615,10 @@
         this.e_btn_delete.addEventListener("click", (event) => {
             this.batch_delete_users();
         });
-        
+        //有变动
         this.e_btn_editPanel.addEventListener("click", (event) => {
-            this.advanced_edit_handler(); 
-        });
+    advanced_edit_handler(); // 调用全局函数
+});
 
         // 初始绑定区域
 // 找到弹窗面板里的那个蓝色“保存”按钮
@@ -21981,223 +22099,509 @@ if (saveBtn) {
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
-// 1. 核心触发器：改为 async 异步，等待数据加载
-async advanced_edit_handler() {
-    const selectedUsers = Array.from(this.selected_user_ids || []);
-    if (selectedUsers.length > 1) {
-        await this.openUserEditor('batch', selectedUsers);
-    } else if (selectedUsers.length === 1) {
-        await this.openUserEditor('single', selectedUsers.at(0)); 
-    } else {
-        alert("⚠️ 请先勾选需要编辑的用户！");
-    }
-}
-
-// 2. 面板显示函数：【核心修复】实时从服务器底层拉取真实数据！
-async openUserEditor(mode, usersData) {
-    const modal = document.getElementById('userEditModal');
-    if (!modal) return;    
-    
-    this.renderDropdownData(); 
-    document.querySelectorAll('.search-select-input').forEach(input => {
-        input.value = '';
-        input.style.backgroundColor = ''; 
-    });
-    
-    modal.classList.add('active');
-
-    const saveBtn = document.querySelector('#userEditModal .panel-footer .btn-admin:last-child');
-    if (saveBtn) {
-        saveBtn.replaceWith(saveBtn.cloneNode(true)); 
-        document.querySelector('#userEditModal .panel-footer .btn-admin:last-child').addEventListener('click', () => {
-            this.saveAllChanges();
-        });
+// ==========================================
+// 编辑面板管理器 - 仅处理编辑面板功能
+// ==========================================
+class UserEditPanelManager {
+    constructor() {
+        this.selectedUserIds = new Set();
+        this.allUsers = [];
+        this.allGroups = [];
+        this.currentEditingUser = null;
+        this.isInitialized = false;
     }
 
-    const titleText = document.getElementById('editor-title-text');
-    const rightTitle = document.getElementById('editor-right-title');
-    const viewSingle = document.getElementById('view-single-user');
-    const viewBatch = document.getElementById('view-batch-users');
-    const groups = ['status', 'storage', 'teams', 'comms', 'extra'];
-
-    if (mode === 'single') {
-        titleText.innerText = '[ 编辑 ]';
-        rightTitle.innerText = '👤 当前编辑的用户';
-        viewSingle.style.display = 'block';
-        viewBatch.style.display = 'none';
+    /**
+     * 初始化编辑面板
+     */
+    async initialize() {
+        if (this.isInitialized) return;
         
-        const targetUid = Array.isArray(usersData) ? usersData.at(0) : usersData;
-        
-        // 视觉提示：正在拉取底层数据
-        document.getElementById('single-username').innerText = `📡 正在连接服务器读取真实数据...`;
-        
-        // 1. 先用 "==" (双等号) 解决类型不匹配的 Bug，保底拿个名字
-        let user = (this.users || this.user_list || []).find(u => u.uid == targetUid || u.id == targetUid) || { uid: targetUid };
-        
-        // ==========================================
-        // 2. 【核心大杀器】：绕过缓存，直接向 worker.js 索要真实详细数据！
-        // ==========================================
         try {
-            const res = await fetch(`/admin/api/user/${targetUid}`);
-            if (res.ok) {
-                const fetchedData = await res.json();
-                // 智能解包后端数据
-                const realUser = fetchedData.data || fetchedData.user || fetchedData; 
-                // 将真实的底层权限覆盖上去，实现 100% 数据穿透同步
-                user = { ...user, ...realUser }; 
-            }
-        } catch (err) {
-            console.warn("实时读取底层数据失败，可能网络波动", err);
-        }
-        
-        if (user) {
-            document.getElementById('single-username').innerText = `👤 ${user.uid || user.username || targetUid}`;
-            
-            // --- 右侧显示真实底层字段 (精准对位) ---
-            document.getElementById('r-status').innerText = user.disabled ? '禁用' : '启用';
-            document.getElementById('r-status').className = user.disabled ? 'status-off' : 'status-on';
-            document.getElementById('r-storage').innerText = `${user.free_space || 0} MB`;
-            document.getElementById('r-teams').innerText = (user.groups || []).join(', ') || '无';
-
-            const commGlobal = user.contact_any;
-            document.getElementById('r-comm-global').innerText = commGlobal ? '开启' : '关闭';
-            document.getElementById('r-comm-global').className = commGlobal ? 'status-on' : 'status-off';
-            document.getElementById('r-comm-groups').innerText = (user.contact_groups || []).join(', ') || '无';
-            document.getElementById('r-comm-users').innerText = (user.contact_users || []).join(', ') || '无';
-
-            const setPerm = (id, val) => {
-                const el = document.getElementById(id);
-                el.innerText = val ? '开启' : '关闭';
-                el.className = val ? 'status-on' : 'status-off';
-            };
-            setPerm('r-perm-drive', user.manage_drive);
-            setPerm('r-perm-friend', user.can_add_friend);
-            setPerm('r-perm-group', user.can_create_group);
-            setPerm('r-perm-invite', user.can_invite_to_group);
-
-            // --- 左侧表单自动对齐底层数据 ---
-            document.querySelector('#content-status .form-select').value = user.disabled ? 'inactive' : 'active';
-            document.querySelector('#content-storage .form-input').value = user.free_space || 1024;
-            document.querySelector('#content-comms .form-select').value = user.contact_any ? 'active' : 'inactive';
-            
-            const autoCheckValues = (dropdownId, valuesArray) => {
-                if (!valuesArray) return;
-                const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
-                cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
-                // 打完勾后立刻刷新视觉
-                if(typeof this.updateDropdownDisplay === 'function') this.updateDropdownDisplay(dropdownId); 
-            };
-            
-            autoCheckValues('dropdown-teams', user.groups);
-            autoCheckValues('dropdown-comm-groups', user.contact_groups);
-            autoCheckValues('dropdown-comm-users', user.contact_users);
-            
-            const exCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
-            if (exCbs.length >= 4) {
-                exCbs.item(0).checked = !!user.manage_drive;
-                exCbs.item(1).checked = !!user.can_add_friend;
-                exCbs.item(2).checked = !!user.can_create_group;
-                exCbs.item(3).checked = !!user.can_invite_to_group;
-            }
-        }
-        groups.forEach(g => this.setGroupState(g, true));
-
-    } else if (mode === 'batch') {
-        titleText.innerText = '[ 批量编辑 ]';
-        rightTitle.innerText = `👤 目标用户列表 (共 ${usersData.length} 人)`;
-        viewSingle.style.display = 'none';
-        viewBatch.style.display = 'flex';
-        viewBatch.innerHTML = ''; 
-        
-        usersData.forEach(uid => {
-            const u = (this.users || this.user_list || []).find(user => user.uid == uid || user.id == uid);
-            const div = document.createElement('div');
-            div.className = 'batch-user-item';
-            div.innerText = `👤 ${u ? (u.uid || u.username) : uid}`;
-            viewBatch.appendChild(div);
-        });
-        groups.forEach(g => this.setGroupState(g, true));
-        this.setGroupState('status', false); 
-        
-        if(typeof this.updateDropdownDisplay === 'function') {
-            this.updateDropdownDisplay('dropdown-teams');
-            this.updateDropdownDisplay('dropdown-comm-groups');
-            this.updateDropdownDisplay('dropdown-comm-users');
-        }
-    }
-}
-// 4. 保存逻辑：发送请求并刷新底层表格
-async saveAllChanges() { 
-    const userIds = Array.from(this.selected_user_ids || []);
-    if (userIds.length === 0) return;
-
-    const payload = {
-        target_ids: userIds, 
-        modifications: {}   
-    };
-
-    const getCheckedValues = (dropdownId) => {
-        const list = document.getElementById(dropdownId);
-        if (!list) return [];
-        return Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-    };
-
-    if (document.getElementById('chk-status') && document.getElementById('chk-status').checked) {
-        payload.modifications.status = document.querySelector('#content-status .form-select').value;
-    }
-    if (document.getElementById('chk-storage') && document.getElementById('chk-storage').checked) {
-        payload.modifications.storage_quota = parseInt(document.querySelector('#content-storage .form-input').value, 10);
-    }
-    if (document.getElementById('chk-teams') && document.getElementById('chk-teams').checked) {
-        payload.modifications.join_groups = getCheckedValues('dropdown-teams');
-    }
-    if (document.getElementById('chk-comms') && document.getElementById('chk-comms').checked) {
-        payload.modifications.comm_settings = {
-            global_comm: document.querySelector('#content-comms .form-select').value,
-            allowed_groups: getCheckedValues('dropdown-comm-groups'),
-            allowed_users: getCheckedValues('dropdown-comm-users')
-        };
-    }
-    if (document.getElementById('chk-extra') && document.getElementById('chk-extra').checked) {
-        const ex = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        if (ex && ex.length >= 4) {
-            payload.modifications.extra_permissions = {
-                manage_drive: ex.item(0).checked, 
-                add_friends: ex.item(1).checked,
-                create_group: ex.item(2).checked, 
-                invite_user: ex.item(3).checked   
-            };
+            await this.loadDataSources();
+            this.isInitialized = true;
+            console.log('✅ 编辑面板初始化完成');
+        } catch (error) {
+            console.error('❌ 初始化失败:', error);
         }
     }
 
+    /**
+     * 加载数据源
+     */
+ async loadDataSources() {
     try {
-        const res = await fetch('/admin/api/users/batch', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        const response = await res.json();
+        const [usersRes, groupsRes] = await Promise.all([
+            fetch('/admin/users'),  // 改为这个
+            fetch('/admin/groups')  // 改为这个
+        ]);
 
-        if (response && response.success) {
-            MessageMark.success(`成功！已修改 ${response.count || userIds.length} 个用户的配置。`);
-            this.closeUserEditor();
-            this.selected_user_ids.clear();
-            if(this._update_delete_button) this._update_delete_button();
-            
-            // 【核心修复】保存后自动刷新底层的用户表格！让你立刻看到变化！
-            if (typeof this.fetch_list === 'function') await this.fetch_list();
-            else if (typeof this._load_users_from_server === 'function') await this._load_users_from_server();
-            
-            if (typeof this.render === 'function') this.render();
-        } else {
-            MessageMark.error('保存失败: ' + (response.error || '未知错误'));
+            this.allUsers = await usersRes.json() || [];
+            this.allGroups = await groupsRes.json() || [];
+        } catch (error) {
+            console.error('❌ 数据加载失败:', error);
+            throw error;
         }
-    } catch (error) {
-        console.error("提交出错:", error);
-        MessageMark.error('网络请求发送失败: ' + error.message);
+    }
+
+    /**
+     * 更新选中的用户（外部调用）
+     */
+    updateSelectedUsers(userIds) {
+        this.selectedUserIds = new Set(userIds);
+    }
+
+    /**
+     * 打开编辑面板
+     */
+    async advanced_edit_handler() {
+        const userIds = Array.from(this.selectedUserIds);
+        
+        if (userIds.length === 0) {
+            alert('⚠️ 请先选择用户');
+            return;
+        }
+
+        try {
+            await this.initialize();
+
+            if (userIds.length === 1) {
+                await this.openSingleUserEditor(userIds[0]);
+            } else {
+                await this.openBatchUserEditor(userIds);
+            }
+
+            // 显示模态框
+            const modal = document.getElementById('userEditModal');
+            if (modal) {
+                modal.classList.add('active');
+                modal.style.display = 'flex';
+            }
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+        }
+    }
+
+    /**
+     * 打开单人编辑模式
+     */
+    async openSingleUserEditor(uid) {
+    try {
+        const res = await fetch(`/admin/user/item/${uid}`);
+            if (!res.ok) throw new Error('加载用户失败');
+
+            const user = await res.json();
+            this.currentEditingUser = user;
+
+            // 更新标题
+            const titleEl = document.getElementById('editor-title-text');
+            if (titleEl) {
+                titleEl.innerHTML = `
+                    [ 编辑 ] 
+                    <span style="font-size: 13px; font-weight: normal; color: #94a3b8; margin-left: 10px;">
+                        (单人模式 - ${user.uid})
+                    </span>
+                `;
+            }
+
+            // 显示单人视图，隐藏批量视图
+            const singleView = document.getElementById('view-single-user');
+            const batchView = document.getElementById('view-batch-users');
+            if (singleView) singleView.style.display = 'block';
+            if (batchView) batchView.style.display = 'none';
+
+            // 填充表单数据
+            this.populateFormData(user);
+
+            // 更新右侧显示
+            this.updateRightPanel(user);
+
+        } catch (error) {
+            console.error('���开单人编辑失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 打开批量编辑模式
+     */
+    async openBatchUserEditor(userIds) {
+        // 更新标题
+        const titleEl = document.getElementById('editor-title-text');
+        if (titleEl) {
+            titleEl.innerHTML = `
+                [ 批量编辑 ] 
+                <span style="font-size: 13px; font-weight: normal; color: #94a3b8; margin-left: 10px;">
+                    (${userIds.length} 个用户)
+                </span>
+            `;
+        }
+
+        // 显示批量视图，隐藏单人视图
+        const singleView = document.getElementById('view-single-user');
+        const batchView = document.getElementById('view-batch-users');
+        if (singleView) singleView.style.display = 'none';
+        if (batchView) {
+            batchView.style.display = 'block';
+            batchView.innerHTML = '';
+
+            // 列出所有选中的用户
+            userIds.forEach(uid => {
+                const user = this.allUsers.find(u => u.uid === uid);
+                const userEl = document.createElement('div');
+                userEl.style.cssText = `
+                    padding: 10px 12px;
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 4px;
+                    margin-bottom: 8px;
+                    font-size: 13px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                `;
+                userEl.innerHTML = `
+                    <span style="font-weight: 600; color: #475569;">👤</span>
+                    <span>${user ? user.uid : uid}</span>
+                `;
+                batchView.appendChild(userEl);
+            });
+        }
+
+        // 重置表单
+        this.resetForm();
+        
+        // 清空右侧显示
+        this.clearRightPanel();
+    }
+
+    /**
+     * 填充表单数据
+     */
+    populateFormData(user) {
+        // 账户状态
+        const statusSelect = document.querySelector('#content-status .form-select');
+        if (statusSelect) {
+            statusSelect.value = user.disabled ? 'inactive' : 'active';
+        }
+
+        // 存储空间
+        const storageInput = document.querySelector('#content-storage .form-input');
+        if (storageInput) {
+            storageInput.value = user.free_space || 1024;
+        }
+
+        // 所属组
+        this.populateDropdown('dropdown-teams', user.groups || []);
+
+        // 通信权限 - 全局
+        const commSelect = document.querySelector('#content-comms .form-select');
+        if (commSelect) {
+            commSelect.value = user.contact_any ? 'active' : 'inactive';
+        }
+
+        // 通信权限 - 允许的组和用户
+        this.populateDropdown('dropdown-comm-groups', user.contact_groups || []);
+        this.populateDropdown('dropdown-comm-users', user.contact_users || []);
+
+        // 附加权限
+        const permsContainer = document.getElementById('content-extra');
+        if (permsContainer) {
+            const checkboxes = permsContainer.querySelectorAll('input[type="checkbox"]');
+            if (checkboxes.length >= 4) {
+                checkboxes[0].checked = !!user.manage_drive;
+                checkboxes[1].checked = !!user.can_add_friend;
+                checkboxes[2].checked = !!user.can_create_group;
+                checkboxes[3].checked = !!user.can_invite_to_group;
+            }
+        }
+    }
+
+    /**
+     * 填充下拉菜单/列表
+     */
+    populateDropdown(dropdownId, selectedValues = []) {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+
+        dropdown.innerHTML = '';
+
+        let options = [];
+        if (dropdownId === 'dropdown-teams' || dropdownId === 'dropdown-comm-groups') {
+            options = this.allGroups.map(g => ({ id: g.gid, name: g.gid }));
+        } else if (dropdownId === 'dropdown-comm-users') {
+            options = this.allUsers.map(u => ({ id: u.uid, name: u.uid }));
+        }
+
+        options.forEach(opt => {
+            const label = document.createElement('label');
+            label.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 10px;
+                cursor: pointer;
+                font-size: 13px;
+                border-bottom: 1px solid #f1f5f9;
+                transition: background 0.2s;
+            `;
+            
+            label.onmouseover = () => label.style.background = '#f8fafc';
+            label.onmouseout = () => label.style.background = 'transparent';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = opt.id;
+            checkbox.checked = selectedValues.includes(opt.id);
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(opt.name));
+            dropdown.appendChild(label);
+        });
+    }
+
+    /**
+     * 更新右侧显示（单人模式）
+     */
+    updateRightPanel(user) {
+    // 账户状态
+    const statusEl = document.getElementById('r-status');
+    if (statusEl) {
+        statusEl.innerText = user.disabled ? '禁用' : '启用';
+        statusEl.className = user.disabled ? 'status-off' : 'status-on';
+    }
+
+    // 存储空间
+    const storageEl = document.getElementById('r-storage');
+    if (storageEl) storageEl.innerText = `${user.free_space || 0} MB`;
+
+    // 所属组
+    const teamsEl = document.getElementById('r-teams');
+    if (teamsEl) teamsEl.innerText = (user.groups || []).join(', ') || '无';
+
+    // 通信权限 - 全局
+    const commEl = document.getElementById('r-comm-global');
+    if (commEl) {
+        commEl.innerText = user.contact_any ? '开启' : '关闭';
+        commEl.className = user.contact_any ? 'status-on' : 'status-off';
+    }
+
+    // 通信权限 - 组和用户
+    const commGroupsEl = document.getElementById('r-comm-groups');
+    if (commGroupsEl) commGroupsEl.innerText = (user.contact_groups || []).join(', ') || '无';
+
+    const commUsersEl = document.getElementById('r-comm-users');
+    if (commUsersEl) commUsersEl.innerText = (user.contact_users || []).join(', ') || '无';
+
+    // 附加权限
+    this.updatePermDisplay('r-perm-drive', user.manage_drive);
+    this.updatePermDisplay('r-perm-friend', user.can_add_friend);
+    this.updatePermDisplay('r-perm-group', user.can_create_group);
+    this.updatePermDisplay('r-perm-invite', user.can_invite_to_group);
+}
+
+/**
+ * 更新单个权限显示
+ */
+updatePermDisplay(elementId, value) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        el.innerText = value ? '开启' : '关闭';
+        el.className = value ? 'status-on' : 'status-off';
     }
 }
+
+    /**
+     * 清空右侧显示（批量模式）
+     */
+    clearRightPanel() {
+        document.querySelectorAll('#view-single-user [data-field], #view-single-user [id^="perm-"]').forEach(el => {
+            el.innerText = '-';
+            el.style.color = '#cbd5e1';
+        });
+    }
+
+    /**
+     * 重置表单
+     */
+    resetForm() {
+        // 清除所有勾选
+        document.querySelectorAll('#userEditModal input[type="checkbox"][id^="chk-"]').forEach(cb => {
+            cb.checked = false;
+            const groupId = cb.id.replace('chk-', '');
+            this.toggleGroupState(groupId);
+        });
+
+        // 清空下拉菜单
+        document.querySelectorAll('#userEditModal .search-select-dropdown input[type="checkbox"]').forEach(cb => {
+            cb.checked = false;
+        });
+
+        // 清空输入框
+        document.querySelectorAll('#userEditModal .form-input').forEach(input => {
+            input.value = '';
+        });
+
+        document.querySelectorAll('#userEditModal .form-select').forEach(select => {
+            select.selectedIndex = 0;
+        });
+    }
+
+    /**
+     * 切换分组状态（勾选框变化时）
+     */
+    toggleGroupState(groupId) {
+        const isChecked = document.getElementById(`chk-${groupId}`)?.checked || false;
+        const contentEl = document.getElementById(`content-${groupId}`);
+
+        if (contentEl) {
+            contentEl.style.opacity = isChecked ? '1' : '0.5';
+            contentEl.style.pointerEvents = isChecked ? 'auto' : 'none';
+        }
+    }
+
+    /**
+     * 获取表单修改数据
+     */
+    getFormModifications() {
+        const modifications = {};
+
+        // 账户状态
+        if (document.getElementById('chk-status')?.checked) {
+            const statusVal = document.querySelector('#content-status .form-select')?.value;
+            if (statusVal) modifications.status = statusVal;
+        }
+
+        // 存储空间
+        if (document.getElementById('chk-storage')?.checked) {
+            const storageVal = parseInt(document.querySelector('#content-storage .form-input')?.value);
+            if (storageVal) modifications.storage_quota = storageVal;
+        }
+
+        // 所属组
+        if (document.getElementById('chk-teams')?.checked) {
+            const selected = Array.from(document.querySelectorAll('#dropdown-teams input[type="checkbox"]:checked'));
+            modifications.join_groups = selected.map(cb => cb.value);
+        }
+
+        // 通信权限
+        if (document.getElementById('chk-comms')?.checked) {
+            const commGlobal = document.querySelector('#content-comms .form-select')?.value || 'inactive';
+            const allowedGroups = Array.from(document.querySelectorAll('#dropdown-comm-groups input[type="checkbox"]:checked')).map(cb => cb.value);
+            const allowedUsers = Array.from(document.querySelectorAll('#dropdown-comm-users input[type="checkbox"]:checked')).map(cb => cb.value);
+
+            modifications.comm_settings = {
+                global_comm: commGlobal,
+                allowed_groups: allowedGroups,
+                allowed_users: allowedUsers
+            };
+        }
+
+        // 附加权限
+        if (document.getElementById('chk-extra')?.checked) {
+            const exCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
+            modifications.extra_permissions = {
+                manage_drive: exCheckboxes[0]?.checked || false,
+                add_friends: exCheckboxes[1]?.checked || false,
+                create_group: exCheckboxes[2]?.checked || false,
+                invite_user: exCheckboxes[3]?.checked || false
+            };
+        }
+
+        return modifications;
+    }
+
+    /**
+     * 保存修改
+     */
+    async saveAllChanges() {
+        const userIds = Array.from(this.selectedUserIds);
+        if (userIds.length === 0) {
+            alert('❌ 没有选中用户');
+            return;
+        }
+
+        const modifications = this.getFormModifications();
+        if (Object.keys(modifications).length === 0) {
+            alert('⚠️ 请勾选要修改的项目');
+            return;
+        }
+
+        try {
+            const res = await fetch('/admin/user/batch', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+                    target_ids: userIds,
+                    modifications: modifications
+                })
+            });
+
+            const result = await res.json();
+            if (result.success) {
+                alert(`✅ 成功修改 ${result.count} 个用户`);
+                
+                // 关闭模态框
+                const modal = document.getElementById('userEditModal');
+                if (modal) {
+                    modal.classList.remove('active');
+                    modal.style.display = 'none';
+                }
+
+                this.selectedUserIds.clear();
+                
+                // 刷新用户列表
+                if (typeof reloadUserTable === 'function') {
+                    reloadUserTable();
+                }
+            } else {
+                alert(`❌ ${result.error || '保存失败'}`);
+            }
+        } catch (error) {
+            console.error('保存失败:', error);
+            alert(`❌ 网络错误: ${error.message}`);
+        }
+    }
+}
+
+// ==========================================
+// 全局实例
+// ==========================================
+const editPanelManager = new UserEditPanelManager();
+
+// ==========================================
+// 外部调用接口
+// ==========================================
+
+/**
+ * 当复选框变化时调用（更新选中用户列表）
+ */
+function updateUserSelection(userIds) {
+    editPanelManager.initialize().then(() => {
+        editPanelManager.updateSelectedUsers(userIds);
+    });
+}
+
+/**
+ * 打开编辑面板（替换你现有的 advanced_edit_handler）
+ */
+function advanced_edit_handler() {
+    editPanelManager.advanced_edit_handler();
+}
+
+/**
+ * 切换分组状态（HTML 中 onchange 使用）
+ */
+function toggleCheckboxGroup(groupId) {
+    editPanelManager.toggleGroupState(groupId);
+}
+
+/**
+ * 初始化编辑面板
+ */
+document.addEventListener('DOMContentLoaded', async () => {
+    await editPanelManager.initialize();
+});
                 // 更新删除按钮状态
                 _update_delete_button() {
                     if (this.selected_user_ids.size > 0) {
@@ -26791,25 +27195,26 @@ if (textarea) {
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 16px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow-y: auto; max-height: 550px;">
                     
                    <div id="view-single-user">
-                        <div id="single-username" style="font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 16px;"></div>
-                        <div class="info-row"><span class="info-label">当前状态：</span> <span id="r-status" class="status-on">启用</span></div>
-                        <div class="info-row"><span class="info-label">当前存储：</span> <span id="r-storage" class="info-value">0 MB</span></div>
-                        <div class="info-row"><span class="info-label">当前所属组：</span> <span id="r-teams" class="info-value">无</span></div>
-                        
-                        <div class="info-section-title">【通信权限】</div>
-                        <div style="padding-left: 8px;">
-                            <div class="info-row"><span class="info-label">全局通信：</span> <span id="r-comm-global" class="status-off">关闭</span></div>
-                            <div class="info-row"><span class="info-label">允许的组：</span> <span id="r-comm-groups" class="info-value">无</span></div>
-                            <div class="info-row"><span class="info-label">允许的人：</span> <span id="r-comm-users" class="info-value">无</span></div>
-                        </div>
-                        
-                        <div class="info-section-title">【附加权限】</div>
-                        <div style="padding-left: 8px;">
-                            <div class="info-row"><span class="info-label">管理网盘：</span> <span id="r-perm-drive" class="status-off">关闭</span></div>
-                            <div class="info-row"><span class="info-label">添加好友：</span> <span id="r-perm-friend" class="status-on">开启</span></div>
-                            <div class="info-row"><span class="info-label">创建群组：</span> <span id="r-perm-group" class="status-on">开启</span></div>
-                            <div class="info-row"><span class="info-label">邀请用户：</span> <span id="r-perm-invite" class="status-off">关闭</span></div>
-                        </div>
+    <div id="single-username" style="..."></div>
+    <div class="info-row"><span class="info-label">当前状态：</span> <span id="r-status" class="status-on">启用</span></div>
+    <div class="info-row"><span class="info-label">当前存储：</span> <span id="r-storage" class="info-value">0 MB</span></div>
+    <div class="info-row"><span class="info-label">当前所属组：</span> <span id="r-teams" class="info-value">无</span></div>
+    
+    <div class="info-section-title">【通信权限】</div>
+    <div style="padding-left: 8px;">
+        <div class="info-row"><span class="info-label">全局通信：</span> <span id="r-comm-global" class="status-off">关闭</span></div>
+        <div class="info-row"><span class="info-label">允许的组：</span> <span id="r-comm-groups" class="info-value">无</span></div>
+        <div class="info-row"><span class="info-label">允许的人：</span> <span id="r-comm-users" class="info-value">无</span></div>
+    </div>
+    
+    <div class="info-section-title">【附加权限】</div>
+    <div style="padding-left: 8px;">
+        <div class="info-row"><span class="info-label">管理网盘：</span> <span id="r-perm-drive" class="status-off">关闭</span></div>
+        <div class="info-row"><span class="info-label">添加好友：</span> <span id="r-perm-friend" class="status-on">开启</span></div>
+        <div class="info-row"><span class="info-label">创建群组：</span> <span id="r-perm-group" class="status-on">开启</span></div>
+        <div class="info-row"><span class="info-label">邀请用户：</span> <span id="r-perm-invite" class="status-off">关闭</span></div>
+    </div>
+</div>
                     </div>
                     
                     <div id="view-batch-users" style="display: none; flex-direction: column; gap: 0;"></div>
@@ -26871,6 +27276,247 @@ if (textarea) {
     });
 </script>
 
+<div id="user-editor" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeUserEditor()">&times;</span>
+        <h2>编辑用户: <span id="edit-uid"></span></h2>
+        
+        <form id="user-editor-form" onsubmit="handleUserSave(event)">
+            <fieldset>
+                <legend>
+                    <input type="checkbox" id="disabled-check" onchange="toggleSection(this)">
+                    账户状态
+                </legend>
+                <div class="form-group">
+                    <label>状态:</label>
+                    <select id="status" disabled>
+                        <option value="enabled">启用</option>
+                        <option value="disabled">禁用</option>
+                    </select>
+                </div>
+            </fieldset>
+            
+            <fieldset>
+                <legend>
+                    <input type="checkbox" id="storage-check" onchange="toggleSection(this)">
+                    存储空间配置
+                </legend>
+                <div class="form-group">
+                    <label>空间大小:</label>
+                    <input type="number" id="free-space" placeholder="MB" min="0" disabled>
+                    <span>MB</span>
+                </div>
+            </fieldset>
+            
+            <fieldset>
+                <legend>
+                    <input type="checkbox" id="groups-check" onchange="toggleSection(this)">
+                    【所属组管理】
+                </legend>
+                <div class="form-group">
+                    <label>搜索并添加:</label>
+                    <input type="text" id="search-groups" placeholder="搜索组..." disabled>
+                    <button type="button" onclick="addGroupToUser()" disabled>加入</button>
+                </div>
+                <div id="groups-list" class="item-list"></div>
+            </fieldset>
+            
+            <fieldset>
+                <legend>
+                    <input type="checkbox" id="contact-check" onchange="toggleSection(this)">
+                    【通信权限设置】
+                </legend>
+                
+                <div class="form-group">
+                    <label>与所有用户通信:</label>
+                    <select id="contact-any" disabled>
+                        <option value="false">禁用</option>
+                        <option value="true">启用</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>可联系的组:</label>
+                    <input type="text" id="search-contact-groups" placeholder="搜索组..." disabled>
+                    <button type="button" onclick="addContactGroup()" disabled>添加</button>
+                </div>
+                <div id="contact-groups-list" class="item-list"></div>
+                
+                <div class="form-group">
+                    <label>可联系的用户:</label>
+                    <input type="text" id="search-contact-users" placeholder="搜索用户..." disabled>
+                    <button type="button" onclick="addContactUser()" disabled>添加</button>
+                </div>
+                <div id="contact-users-list" class="item-list"></div>
+            </fieldset>
+            
+            <fieldset>
+                <legend>
+                    <input type="checkbox" id="extra-perms-check" onchange="toggleSection(this)">
+                    【附加权限管理】
+                </legend>
+                
+                <div class="form-group">
+                    <label><input type="checkbox" id="manage-drive" disabled> 管理所有网盘</label>
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="can-add-friend" disabled> 添加好友</label>
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="can-create-group" disabled> 创建群组</label>
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="can-invite-group" disabled> 邀请用户</label>
+                </div>
+            </fieldset>
+            
+            <div class="form-actions">
+                <button type="button" onclick="closeUserEditor()">取消</button>
+                <button type="submit">保存修改</button>
+            </div>
+        </form>
+    </div>
+</div><script>
+let currentEditingUser = null;
+
+async function openUserEditor(uid) {
+    currentEditingUser = uid;
+    document.getElementById('edit-uid').textContent = uid;
+    
+    try {
+        const response = await fetch('/admin/api/user/' + uid);
+        if (!response.ok) throw new Error('加载失败');
+        
+        const data = await response.json();
+        document.getElementById('status').value = data.disabled ? 'disabled' : 'enabled';
+        document.getElementById('free-space').value = data.free_space || 5120;
+        document.getElementById('contact-any').value = data.contact_any ? 'true' : 'false';
+        document.getElementById('manage-drive').checked = data.manage_drive || false;
+        document.getElementById('can-add-friend').checked = data.can_add_friend || false;
+        document.getElementById('can-create-group').checked = data.can_create_group || false;
+        document.getElementById('can-invite-group').checked = data.can_invite_to_group || false;
+        
+        renderItemList('groups-list', data.groups || []);
+        renderItemList('contact-groups-list', data.contact_groups || []);
+        renderItemList('contact-users-list', data.contact_users || []);
+        
+        document.getElementById('user-editor').style.display = 'block';
+    } catch (error) {
+        alert('加载失败: ' + error.message);
+    }
+}
+
+function closeUserEditor() {
+    document.getElementById('user-editor').style.display = 'none';
+}
+
+function renderItemList(containerId, items) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = items.map(item => 
+        '<div class="list-item">' + item + 
+        '<button type="button" onclick="removeItem(this)">&times;</button></div>'
+    ).join('');
+}
+
+function removeItem(btn) {
+    btn.parentElement.remove();
+}
+
+function toggleSection(checkbox) {
+    const fieldset = checkbox.closest('fieldset');
+    const inputs = fieldset.querySelectorAll('input:not([type="checkbox"]), select, button');
+    inputs.forEach(input => { input.disabled = !checkbox.checked; });
+}
+
+function addGroupToUser() {
+    const input = document.getElementById('search-groups');
+    const gid = input.value.trim();
+    if (!gid) return alert('请输入组名');
+    
+    const container = document.getElementById('groups-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = gid + '<button type="button" onclick="removeItem(this)">&times;</button>';
+    container.appendChild(item);
+    input.value = '';
+}
+
+function addContactGroup() {
+    const input = document.getElementById('search-contact-groups');
+    const gid = input.value.trim();
+    if (!gid) return alert('请输入组名');
+    
+    const container = document.getElementById('contact-groups-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = gid + '<button type="button" onclick="removeItem(this)">&times;</button>';
+    container.appendChild(item);
+    input.value = '';
+}
+
+function addContactUser() {
+    const input = document.getElementById('search-contact-users');
+    const uid = input.value.trim();
+    if (!uid) return alert('请输入用户名');
+    
+    const container = document.getElementById('contact-users-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = uid + '<button type="button" onclick="removeItem(this)">&times;</button>';
+    container.appendChild(item);
+    input.value = '';
+}
+
+function getListItems(containerId) {
+    const items = [];
+    const container = document.getElementById(containerId);
+    container.querySelectorAll('.list-item').forEach(el => {
+        items.push(el.textContent.replace('×', '').trim());
+    });
+    return items;
+}
+
+async function handleUserSave(event) {
+    event.preventDefault();
+    
+    const data = {
+        uid: currentEditingUser,
+        disabled: document.getElementById('status').value === 'disabled',
+        free_space: parseInt(document.getElementById('free-space').value) || 5120,
+        contact_any: document.getElementById('contact-any').value === 'true',
+        manage_drive: document.getElementById('manage-drive').checked,
+        can_add_friend: document.getElementById('can-add-friend').checked,
+        can_create_group: document.getElementById('can-create-group').checked,
+        can_invite_to_group: document.getElementById('can-invite-group').checked,
+        groups: getListItems('groups-list'),
+        contact_groups: getListItems('contact-groups-list'),
+        contact_users: getListItems('contact-users-list')
+    };
+    
+    try {
+        const response = await fetch('/admin/api/user/' + currentEditingUser, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            alert('保存成功');
+            closeUserEditor();
+            location.reload();
+        } else {
+            alert('保存失败');
+        }
+    } catch (error) {
+        alert('保存失败: ' + error.message);
+    }
+}
+
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('user-editor');
+    if (event.target === modal) closeUserEditor();
+});
+</script>
 </body>
 
 </html>
