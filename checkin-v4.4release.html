@@ -3554,6 +3554,54 @@
         }
 
         /* 编辑按钮样式 */
+        .settings-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-btn-EditPanel {
+    display: inline-block;
+    padding: 8px 12px;
+    background: transparent !important;
+    transition: all 0.1s ease-in-out;
+    border: 1px solid #d4a017 !important;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #d4a017;
+}
+
+.settings-btn-EditPanel:hover:not(:disabled) {
+    background-color: #d4a017 !important;
+    color: white !important;
+}
+
+.settings-btn-EditPanel:active:not(:disabled) {
+    background-color: #b58900 !important;
+}
+
+.settings-btn-EditPanel:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: #ccc !important;
+    color: #ccc;
+}
+
+.theme-dark .settings-btn-EditPanel {
+    border-color: #f6d365 !important;
+    color: #f6d365;
+}
+
+.theme-dark .settings-btn-EditPanel:hover:not(:disabled) {
+    background: #f6d365 !important;
+    color: #1a202c !important;
+}
+
+.theme-dark .settings-btn-EditPanel:disabled {
+    border-color: #718096 !important;
+    color: #718096;
+}
         .settings-btn-edit {
             display: inline-block;
             padding: 8px 12px;
@@ -3564,7 +3612,6 @@
             cursor: pointer;
             font-size: 13px;
             color: #007bff;
-            margin-right: 8px;
         }
 
         .settings-btn-edit:hover:not(:disabled) {
