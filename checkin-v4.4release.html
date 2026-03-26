@@ -11203,7 +11203,14 @@
                 }
                 throw new Error(await format_error_response(r));
             }
-
+            async batch_edit_users(payload) {
+            let url = join_path(this.api_url(), "users", "batch");
+            let r = await net_fetcher.nf_put_json(url, payload);
+            if (r.status === 200) {
+            return await r.json();
+            }
+            throw new Error(await format_error_response(r));
+            }
             async fetch_group_attr(gid) {
                 let url = join_path(this.api_url(), "group", gid);
                 let r = await net_fetcher.nf_get(url,);
@@ -21980,17 +21987,62 @@
                     const all_checked = all_checkboxes.every(cb => cb.checked);
                     select_all_checkbox.checked = all_checked;
                 }
+                
+                async prepareEditorData(uids) {
+    if (!uids || uids.length === 0) return;
+
+    const rawUsers = await this.client.subviews.admin.fetch_user_attrs(uids);
+
+    const normalizedUsers = rawUsers.map(u => ({
+        id: u.uid,
+        username: u.uid,
+        status: u.disabled ? "inactive" : "active",
+        storage_quota: u.free_space ?? 1024,
+        join_groups: u.groups || [],
+        comm_settings: {
+            global_comm: u.contact_any ? "active" : "inactive",
+            allowed_groups: u.contact_groups || [],
+            allowed_users: u.contact_users || [],
+        },
+        extra_permissions: {
+            manage_drive: !!u.manage_drive,
+            add_friends: !!u.can_add_friend,
+            create_group: !!u.can_create_group,
+            invite_user: !!u.can_invite_to_group,
+        }
+    }));
+
+    const userMap = new Map((this.users || []).map(u => [u.id, u]));
+    normalizedUsers.forEach(u => userMap.set(u.id, u));
+    this.users = Array.from(userMap.values());
+
+    const groupSet = new Set();
+    this.users.forEach(u => {
+        (u.join_groups || []).forEach(g => groupSet.add(g));
+        (u.comm_settings?.allowed_groups || []).forEach(g => groupSet.add(g));
+    });
+    this.teams = Array.from(groupSet).map(name => ({ name }));
+}
 // 1. 核心触发器
-advanced_edit_handler() {
+async advanced_edit_handler() {
     const selectedUsers = Array.from(this.selected_user_ids || []);
-    if (selectedUsers.length > 1) {
-        // 批量模式：传整个数组
-        this.openUserEditor('batch', selectedUsers);
-    } else if (selectedUsers.length === 1) {
-        // 使用 .at(0) 代替方括号，防止被你的编辑器吞掉
-        this.openUserEditor('single', selectedUsers.at(0)); 
-    } else {
-        alert("⚠️ 请先勾选需要编辑的用户！");
+
+    if (selectedUsers.length === 0) {
+        MessageMark.report("⚠️ 请先勾选需要编辑的用户！");
+        return;
+    }
+
+    try {
+        await this.prepareEditorData(selectedUsers);
+
+        if (selectedUsers.length > 1) {
+            this.openUserEditor("batch", selectedUsers);
+        } else {
+            this.openUserEditor("single", selectedUsers.at(0));
+        }
+    } catch (error) {
+        console.error(error);
+        MessageMark.report(error);
     }
 }
 
@@ -22128,64 +22180,97 @@ openUserEditor(mode, usersData) {
 }
 
 // 4. 【接入真接口】：打包数据发给后端
-async saveAllChanges() { 
+async saveAllChanges() {
     const userIds = Array.from(this.selected_user_ids || []);
-    if (userIds.length === 0) return;
+    if (userIds.length === 0) {
+        MessageMark.report("请先选择用户");
+        return;
+    }
 
     const payload = {
-        target_ids: userIds, 
-        modifications: {}   
+        target_ids: userIds,
+        modifications: {}
     };
 
     const getCheckedValues = (dropdownId) => {
-        const checkboxes = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]:checked`);
+        const checkboxes = document.querySelectorAll(
+            `#${dropdownId} input[type="checkbox"]:checked`
+        );
         return Array.from(checkboxes).map(cb => cb.value);
     };
 
-    if (document.getElementById('chk-status').checked) {
-        payload.modifications.status = document.querySelector('#content-status .form-select').value;
+    if (document.getElementById("chk-status")?.checked) {
+        payload.modifications.status =
+            document.querySelector("#content-status .form-select").value;
     }
-    if (document.getElementById('chk-storage').checked) {
-        payload.modifications.storage_quota = parseInt(document.querySelector('#content-storage .form-input').value, 10);
+
+    if (document.getElementById("chk-storage")?.checked) {
+        payload.modifications.storage_quota = parseInt(
+            document.querySelector("#content-storage .form-input").value,
+            10
+        );
     }
-    if (document.getElementById('chk-teams').checked) {
-        payload.modifications.join_groups = getCheckedValues('dropdown-teams');
+
+    if (document.getElementById("chk-teams")?.checked) {
+        payload.modifications.join_groups = getCheckedValues("dropdown-teams");
     }
-    if (document.getElementById('chk-comms').checked) {
+
+    if (document.getElementById("chk-comms")?.checked) {
         payload.modifications.comm_settings = {
-            global_comm: document.querySelector('#content-comms .form-select').value,
-            allowed_groups: getCheckedValues('dropdown-comm-groups'),
-            allowed_users: getCheckedValues('dropdown-comm-users')
-        };
-    }
-   if (document.getElementById('chk-extra').checked) {
-        const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
-        // 使用 .item() 代替方括号，完美绕过过滤 Bug！
-        payload.modifications.extra_permissions = {
-            manage_drive: extraCheckboxes.item(0).checked, 
-            add_friends: extraCheckboxes.item(1).checked,
-            create_group: extraCheckboxes.item(2).checked, 
-            invite_user: extraCheckboxes.item(3).checked   
+            global_comm: document.querySelector("#content-comms .form-select").value,
+            allowed_groups: getCheckedValues("dropdown-comm-groups"),
+            allowed_users: getCheckedValues("dropdown-comm-users")
         };
     }
 
-    console.log("即将发往后端的数据：", payload);
+    if (document.getElementById("chk-extra")?.checked) {
+        const extraCheckboxes = document.querySelectorAll(
+            "#content-extra input[type='checkbox']"
+        );
+
+        payload.modifications.extra_permissions = {
+            manage_drive: !!extraCheckboxes.item(0)?.checked,
+            add_friends: !!extraCheckboxes.item(1)?.checked,
+            create_group: !!extraCheckboxes.item(2)?.checked,
+            invite_user: !!extraCheckboxes.item(3)?.checked
+        };
+    }
+
+    if (Object.keys(payload.modifications).length === 0) {
+        MessageMark.report("请先勾选至少一个要修改的项目");
+        return;
+    }
+
+    this.loading_mark.show();
 
     try {
-        const response = await window.app.api_request('PUT', '/api/admin/users/batch', payload);
-        if (response && response.success) {
-            MessageMark.success(`成功配置！已修改 ${userIds.length} 个用户。`);
-            this.closeUserEditor();
-            this.selected_user_ids.clear();
-            this._update_delete_button();
-            await this._load_users_from_server(); 
-            this.render();
-        } else {
-            MessageMark.error('保存失败: ' + (response.error || '未知错误'));
+        const result = await this.client.subviews.admin.batch_edit_users(payload);
+
+        if (!result || !result.success) {
+            throw new Error(result?.error || "保存失败");
         }
+
+        this.closeUserEditor();
+        this.selected_user_ids.clear();
+        this._update_delete_button();
+
+        if (this.tree1 && Array.isArray(this.tree1.tree_items)) {
+            [...this.tree1.tree_items].forEach(item => this.tree1.remove_item(item));
+        }
+        await this.fetch_list();
+
+        MessageMark.report(
+            `成功配置！已修改 ${result.count ?? userIds.length} 个用户。`,
+            null,
+            null,
+            null,
+            MessageMark.colors.blue
+        );
     } catch (error) {
         console.error(error);
-        MessageMark.error('网络请求失败');
+        MessageMark.report(error);
+    } finally {
+        this.remove_loading_mark();
     }
 }
 
