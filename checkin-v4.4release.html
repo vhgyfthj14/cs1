@@ -21517,6 +21517,29 @@ if (saveBtn && !saveBtn.dataset.boundAdminSave) {
         this.saveAllChanges();
     });
 }
+const addTeamsBtn = document.getElementById('btn-add-teams');
+if (addTeamsBtn && !addTeamsBtn.dataset.boundAddTeams) {
+    addTeamsBtn.dataset.boundAddTeams = "1";
+    addTeamsBtn.addEventListener('click', () => {
+        this.addSelectedFromDropdown('dropdown-teams', 'join_groups');
+    });
+}
+
+const addCommGroupsBtn = document.getElementById('btn-add-comm-groups');
+if (addCommGroupsBtn && !addCommGroupsBtn.dataset.boundAddCommGroups) {
+    addCommGroupsBtn.dataset.boundAddCommGroups = "1";
+    addCommGroupsBtn.addEventListener('click', () => {
+        this.addSelectedFromDropdown('dropdown-comm-groups', 'allowed_groups');
+    });
+}
+
+const addCommUsersBtn = document.getElementById('btn-add-comm-users');
+if (addCommUsersBtn && !addCommUsersBtn.dataset.boundAddCommUsers) {
+    addCommUsersBtn.dataset.boundAddCommUsers = "1";
+    addCommUsersBtn.addEventListener('click', () => {
+        this.addSelectedFromDropdown('dropdown-comm-users', 'allowed_users');
+    });
+}
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
@@ -22047,7 +22070,97 @@ async advanced_edit_handler() {
         MessageMark.report(error);
     }
 }
+initEditorPendingValues() {
+    this.editor_pending_values = {
+        join_groups: [],
+        allowed_groups: [],
+        allowed_users: []
+    };
+}
 
+getCheckedValues(dropdownId) {
+    const checkboxes = document.querySelectorAll(
+        `#${dropdownId} input[type="checkbox"]:checked`
+    );
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+renderSelectedItems(panelId, key) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    const items = this.editor_pending_values?.[key] || [];
+
+    if (items.length === 0) {
+        panel.innerHTML = `<span class="selected-empty">暂无本次新增项</span>`;
+        return;
+    }
+
+    panel.innerHTML = items.map(item => `
+        <span class="selected-chip">
+            <span>${item}</span>
+            <button
+                type="button"
+                class="selected-chip-remove"
+                data-key="${key}"
+                data-value="${item}"
+                title="移除"
+            >×</button>
+        </span>
+    `).join('');
+
+    panel.querySelectorAll('.selected-chip-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const k = btn.dataset.key;
+            const v = btn.dataset.value;
+            this.removePendingValue(k, v);
+        });
+    });
+}
+
+removePendingValue(key, value) {
+    if (!this.editor_pending_values || !this.editor_pending_values[key]) return;
+
+    this.editor_pending_values[key] =
+        this.editor_pending_values[key].filter(item => item !== value);
+
+    this.refreshEditorSelectionsUI();
+}
+
+addSelectedFromDropdown(dropdownId, key) {
+    if (!this.editor_pending_values) {
+        this.initEditorPendingValues();
+    }
+
+    const picked = this.getCheckedValues(dropdownId);
+    if (picked.length === 0) {
+        MessageMark.report("请先在下拉里勾选至少一项");
+        return;
+    }
+
+    this.editor_pending_values[key] = [
+        ...new Set([
+            ...(this.editor_pending_values[key] || []),
+            ...picked
+        ])
+    ];
+
+    const checkboxes = document.querySelectorAll(
+        `#${dropdownId} input[type="checkbox"]`
+    );
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+    });
+
+    this.refreshEditorSelectionsUI();
+}
+
+refreshEditorSelectionsUI() {
+    this.renderDropdownData();
+    this.renderSelectedItems('selected-teams-panel', 'join_groups');
+    this.renderSelectedItems('selected-comm-groups-panel', 'allowed_groups');
+    this.renderSelectedItems('selected-comm-users-panel', 'allowed_users');
+}
 // 2. 【接入真数据】：渲染搜索下拉框数据
 renderDropdownData() {
     const allGroups = [...new Set(
@@ -22063,23 +22176,33 @@ renderDropdownData() {
     )];
 
     const existing = this.editor_existing_values || {
-        join_groups: [],
-        allowed_groups: [],
-        allowed_users: []
-    };
+    join_groups: [],
+    allowed_groups: [],
+    allowed_users: []
+};
 
-    const excludeUserSet = new Set(this.editor_excluded_usernames || []);
+const pending = this.editor_pending_values || {
+    join_groups: [],
+    allowed_groups: [],
+    allowed_users: []
+};
 
-    // 单人模式：隐藏已经有的；批量模式：不隐藏已有值，只隐藏当前批量目标自己
-    const excludeJoinGroupSet = new Set(
-        this.editor_mode === 'single' ? (existing.join_groups || []) : []
-    );
-    const excludeAllowedGroupSet = new Set(
-        this.editor_mode === 'single' ? (existing.allowed_groups || []) : []
-    );
-    const excludeAllowedUserSet = new Set(
-        this.editor_mode === 'single' ? (existing.allowed_users || []) : []
-    );
+const excludeUserSet = new Set(this.editor_excluded_usernames || []);
+
+const excludeJoinGroupSet = new Set([
+    ...(this.editor_mode === 'single' ? (existing.join_groups || []) : []),
+    ...(pending.join_groups || [])
+]);
+
+const excludeAllowedGroupSet = new Set([
+    ...(this.editor_mode === 'single' ? (existing.allowed_groups || []) : []),
+    ...(pending.allowed_groups || [])
+]);
+
+const excludeAllowedUserSet = new Set([
+    ...(this.editor_mode === 'single' ? (existing.allowed_users || []) : []),
+    ...(pending.allowed_users || [])
+]);
 
     const teamCandidates = allGroups.filter(name => !excludeJoinGroupSet.has(name));
     const commGroupCandidates = allGroups.filter(name => !excludeAllowedGroupSet.has(name));
@@ -22120,7 +22243,7 @@ this.editor_existing_values = {
     allowed_users: []
 };
 this.editor_excluded_usernames = [];
-
+this.initEditorPendingValues();
 // 单人编辑：记录当前用户已经有的组、已经允许通信的组/用户
 if (mode === 'single') {
     const currentUser = (this.users || []).find(u => u.id === usersData);
@@ -22143,7 +22266,7 @@ if (mode === 'single') {
 }
 
     // 重新渲染下拉框
-    this.renderDropdownData();
+    this.refreshEditorSelectionsUI();
 
     // 清空搜索框残留
     document.querySelectorAll('.search-select-input').forEach(input => input.value = '');
@@ -22267,6 +22390,7 @@ async saveAllChanges() {
     };
     const isSingleEdit = Array.isArray(this.editing_user_ids) && this.editing_user_ids.length === 1;
 const existing = this.editor_existing_values || { join_groups: [], allowed_groups: [], allowed_users: [] };
+const pending = this.editor_pending_values || { join_groups: [], allowed_groups: [], allowed_users: [] };
     const getCheckedValues = (dropdownId) => {
         const checkboxes = document.querySelectorAll(
             `#${dropdownId} input[type="checkbox"]:checked`
@@ -22287,15 +22411,32 @@ const existing = this.editor_existing_values || { join_groups: [], allowed_group
     }
 
     if (document.getElementById('chk-teams')?.checked) {
-    const picked = getCheckedValues('dropdown-teams');
+    const picked = [
+        ...new Set([
+            ...(pending.join_groups || []),
+            ...getCheckedValues('dropdown-teams')
+        ])
+    ];
+
     payload.modifications.join_groups = isSingleEdit
         ? [...new Set([...(existing.join_groups || []), ...picked])]
         : picked;
 }
 
     if (document.getElementById('chk-comms')?.checked) {
-    const pickedGroups = getCheckedValues('dropdown-comm-groups');
-    const pickedUsers = getCheckedValues('dropdown-comm-users');
+    const pickedGroups = [
+        ...new Set([
+            ...(pending.allowed_groups || []),
+            ...getCheckedValues('dropdown-comm-groups')
+        ])
+    ];
+
+    const pickedUsers = [
+        ...new Set([
+            ...(pending.allowed_users || []),
+            ...getCheckedValues('dropdown-comm-users')
+        ])
+    ];
 
     payload.modifications.comm_settings = {
         global_comm: document.querySelector('#content-comms .form-select').value,
@@ -22343,6 +22484,7 @@ const existing = this.editor_existing_values || { join_groups: [], allowed_group
 
         this.closeUserEditor();
         this.editing_user_ids = [];
+        this.initEditorPendingValues();
         this.selected_user_ids.clear();
         this._update_delete_button();
 
@@ -26821,8 +26963,46 @@ if (textarea) {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
 }
+.selected-items-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    min-height: 20px;
+}
 
+.selected-empty {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.selected-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #e8f0ff;
+    border: 1px solid #bfd3ff;
+    color: #1d4ed8;
+    font-size: 13px;
+}
+
+.selected-chip-remove {
+    border: none;
+    background: transparent;
+    color: #1d4ed8;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    line-height: 1;
+}
+
+.selected-chip-remove:hover {
+    color: #dc2626;
+}
 .search-select-dropdown {
+
     position: absolute;
     top: 100%;
     left: 0;
@@ -26903,10 +27083,11 @@ if (textarea) {
             <div class="edit-controls">
                 <div class="search-select-container">
                     <input type="text" class="search-select-input" placeholder="搜索组并勾选..." onfocus="showDropdown('dropdown-teams')" oninput="filterDropdown('dropdown-teams', this.value)">
-                    <div class="search-select-dropdown" id="dropdown-teams">
-                        </div>
-                </div>
-                <button class="btn-admin" type="button" disabled title="直接勾选下拉项即可，无需点击此按钮" style="opacity: 0.5; cursor: not-allowed;">加入</button>
+                    <div class="search-select-dropdown" id="dropdown-teams"></div>
+</div>
+<button id="btn-add-teams" class="btn-admin" type="button">加入</button>
+</div>
+<div id="selected-teams-panel" class="selected-items-panel"></div>
             </div>
         </div>
     </div>
@@ -26933,8 +27114,10 @@ if (textarea) {
                     <div class="search-select-container">
                         <input type="text" class="search-select-input" placeholder="搜索允许的组..." onfocus="showDropdown('dropdown-comm-groups')" oninput="filterDropdown('dropdown-comm-groups', this.value)">
                         <div class="search-select-dropdown" id="dropdown-comm-groups"></div>
-                    </div>
-                    <button class="btn-admin" type="button" disabled title="直接勾选下拉项即可，无需点击此按钮" style="opacity: 0.5; cursor: not-allowed;">添加</button>
+</div>
+<button id="btn-add-comm-groups" class="btn-admin" type="button">添加</button>
+</div>
+<div id="selected-comm-groups-panel" class="selected-items-panel"></div>
                 </div>
             </div>
             
@@ -26944,8 +27127,10 @@ if (textarea) {
                     <div class="search-select-container">
                         <input type="text" class="search-select-input" placeholder="搜索允许的用户..." onfocus="showDropdown('dropdown-comm-users')" oninput="filterDropdown('dropdown-comm-users', this.value)">
                         <div class="search-select-dropdown" id="dropdown-comm-users"></div>
-                    </div>
-                    <button class="btn-admin" type="button" disabled title="直接勾选下拉项即可，无需点击此按钮" style="opacity: 0.5; cursor: not-allowed;">添加</button>
+</div>
+<button id="btn-add-comm-users" class="btn-admin" type="button">添加</button>
+</div>
+<div id="selected-comm-users-panel" class="selected-items-panel"></div>
                 </div>
             </div>
         </div>
