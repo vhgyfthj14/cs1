@@ -21511,11 +21511,12 @@
 
         // 👇 给弹窗里的“保存所有修改”按钮接上电线 (只需接一次！)
         const saveBtn = document.getElementById('btn-save-user-edits');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                this.saveAllChanges(); // 点击时，执行保存逻辑
-            });
-        }
+if (saveBtn && !saveBtn.dataset.boundAdminSave) {
+    saveBtn.dataset.boundAdminSave = "1";
+    saveBtn.addEventListener('click', () => {
+        this.saveAllChanges();
+    });
+}
 
                     const tree_headers = [
                         {text: "", width: 40, checkbox: true,},
@@ -22057,12 +22058,14 @@ renderDropdownData() {
     const myUid =
         (typeof logged_user !== 'undefined' && (logged_user?.uid || logged_user?.username)) || null;
 
-    const allUsers = [...new Set(
-        (this.users || [])
-            .filter(u => u && u.username)
-            .filter(u => u.username !== myUid && u.id !== myUid)
-            .map(u => u.username)
+    // 关键：从当前用户列表树里取全部用户名，而不是从 this.users 里取
+    const allUsersFromTree = [...new Set(
+        (this.tree1?.tree_items || [])
+            .map(item => item?.attr?.columns?.[3]?.text)
+            .filter(Boolean)
     )];
+
+    const allUsers = allUsersFromTree.filter(name => name !== myUid);
 
     const generateHtml = (items) => items.map(item => `
         <label class="search-select-item">
@@ -22200,7 +22203,11 @@ openUserEditor(mode, usersData) {
 
 // 4. 【接入真接口】：打包数据发给后端
 async saveAllChanges() {
+    if (this.is_saving_user_edits) return;
+
+    const saveBtn = document.getElementById('btn-save-user-edits');
     const userIds = Array.isArray(this.editing_user_ids) ? [...this.editing_user_ids] : [];
+
     if (userIds.length === 0) {
         MessageMark.report("请先选择用户");
         return;
@@ -22257,6 +22264,15 @@ async saveAllChanges() {
         return;
     }
 
+    this.is_saving_user_edits = true;
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中...';
+        saveBtn.style.opacity = '0.7';
+        saveBtn.style.cursor = 'not-allowed';
+    }
+
     this.loading_mark.show();
 
     try {
@@ -22274,6 +22290,7 @@ async saveAllChanges() {
         if (this.tree1 && Array.isArray(this.tree1.tree_items)) {
             [...this.tree1.tree_items].forEach(item => this.tree1.remove_item(item));
         }
+
         await this.fetch_list();
 
         MessageMark.report(`成功配置！已修改 ${response.count ?? userIds.length} 个用户。`);
@@ -22281,6 +22298,15 @@ async saveAllChanges() {
         console.error(error);
         MessageMark.report(error);
     } finally {
+        this.is_saving_user_edits = false;
+
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 保存所有修改';
+            saveBtn.style.opacity = '';
+            saveBtn.style.cursor = '';
+        }
+
         this.remove_loading_mark();
     }
 }
@@ -26821,7 +26847,7 @@ if (textarea) {
                     <div class="search-select-dropdown" id="dropdown-teams">
                         </div>
                 </div>
-                <button class="btn-admin">加入</button>
+                <button class="btn-admin" type="button" disabled title="直接勾选下拉项即可，无需点击此按钮" style="opacity: 0.5; cursor: not-allowed;">加入</button>
             </div>
         </div>
     </div>
@@ -26849,7 +26875,7 @@ if (textarea) {
                         <input type="text" class="search-select-input" placeholder="搜索允许的组..." onfocus="showDropdown('dropdown-comm-groups')" oninput="filterDropdown('dropdown-comm-groups', this.value)">
                         <div class="search-select-dropdown" id="dropdown-comm-groups"></div>
                     </div>
-                    <button class="btn-admin">添加</button>
+                    <button class="btn-admin" type="button" disabled title="直接勾选下拉项即可，无需点击此按钮" style="opacity: 0.5; cursor: not-allowed;">添加</button>
                 </div>
             </div>
             
@@ -26860,7 +26886,7 @@ if (textarea) {
                         <input type="text" class="search-select-input" placeholder="搜索允许的用户..." onfocus="showDropdown('dropdown-comm-users')" oninput="filterDropdown('dropdown-comm-users', this.value)">
                         <div class="search-select-dropdown" id="dropdown-comm-users"></div>
                     </div>
-                    <button class="btn-admin">添加</button>
+                    <button class="btn-admin" type="button" disabled title="直接勾选下拉项即可，无需点击此按钮" style="opacity: 0.5; cursor: not-allowed;">添加</button>
                 </div>
             </div>
         </div>
