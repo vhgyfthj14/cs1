@@ -22048,32 +22048,51 @@ async advanced_edit_handler() {
 
 // 2. 【接入真数据】：渲染搜索下拉框数据
 renderDropdownData() {
-    const allGroups = (this.teams || []).map(t => t.name); 
-    const allUsers = (this.users || []).map(u => u.username);
+    const allGroups = [...new Set(
+        (this.teams || [])
+            .map(t => t.name)
+            .filter(Boolean)
+    )];
+
+    const myUid =
+        (typeof logged_user !== 'undefined' && (logged_user?.uid || logged_user?.username)) || null;
+
+    const allUsers = [...new Set(
+        (this.users || [])
+            .filter(u => u && u.username)
+            .filter(u => u.username !== myUid && u.id !== myUid)
+            .map(u => u.username)
+    )];
+
     const generateHtml = (items) => items.map(item => `
         <label class="search-select-item">
             <input type="checkbox" value="${item}">
             <span>${item}</span>
         </label>
     `).join('');
-    
+
     const dt = document.getElementById('dropdown-teams');
-    if(dt) dt.innerHTML = generateHtml(allGroups);
+    if (dt) dt.innerHTML = generateHtml(allGroups);
+
     const dcg = document.getElementById('dropdown-comm-groups');
-    if(dcg) dcg.innerHTML = generateHtml(allGroups);
+    if (dcg) dcg.innerHTML = generateHtml(allGroups);
+
     const dcu = document.getElementById('dropdown-comm-users');
-    if(dcu) dcu.innerHTML = generateHtml(allUsers);
+    if (dcu) dcu.innerHTML = generateHtml(allUsers);
 }
 
 // 3. 【接入真数据 + 自动回填】：打开面板并填充信息
 openUserEditor(mode, usersData) {
     const modal = document.getElementById('userEditModal');
-    if (!modal) return;    
-    
-    // 1. 重新渲染下拉框（自带清空上一次所有勾选状态的效果）
-    this.renderDropdownData(); 
+    if (!modal) return;
 
-    // 2. 清空所有的搜索输入框里残留的文字
+    // 关键：固定当前这次弹窗对应的目标用户
+    this.editing_user_ids = Array.isArray(usersData) ? [...usersData] : [usersData];
+
+    // 重新渲染下拉框
+    this.renderDropdownData();
+
+    // 清空搜索框残留
     document.querySelectorAll('.search-select-input').forEach(input => input.value = '');
 
     modal.classList.add('active');
@@ -22181,7 +22200,7 @@ openUserEditor(mode, usersData) {
 
 // 4. 【接入真接口】：打包数据发给后端
 async saveAllChanges() {
-    const userIds = Array.from(this.selected_user_ids || []);
+    const userIds = Array.isArray(this.editing_user_ids) ? [...this.editing_user_ids] : [];
     if (userIds.length === 0) {
         MessageMark.report("请先选择用户");
         return;
@@ -22199,35 +22218,32 @@ async saveAllChanges() {
         return Array.from(checkboxes).map(cb => cb.value);
     };
 
-    if (document.getElementById("chk-status")?.checked) {
+    if (document.getElementById('chk-status')?.checked) {
         payload.modifications.status =
-            document.querySelector("#content-status .form-select").value;
+            document.querySelector('#content-status .form-select').value;
     }
 
-    if (document.getElementById("chk-storage")?.checked) {
+    if (document.getElementById('chk-storage')?.checked) {
         payload.modifications.storage_quota = parseInt(
-            document.querySelector("#content-storage .form-input").value,
+            document.querySelector('#content-storage .form-input').value,
             10
         );
     }
 
-    if (document.getElementById("chk-teams")?.checked) {
-        payload.modifications.join_groups = getCheckedValues("dropdown-teams");
+    if (document.getElementById('chk-teams')?.checked) {
+        payload.modifications.join_groups = getCheckedValues('dropdown-teams');
     }
 
-    if (document.getElementById("chk-comms")?.checked) {
+    if (document.getElementById('chk-comms')?.checked) {
         payload.modifications.comm_settings = {
-            global_comm: document.querySelector("#content-comms .form-select").value,
-            allowed_groups: getCheckedValues("dropdown-comm-groups"),
-            allowed_users: getCheckedValues("dropdown-comm-users")
+            global_comm: document.querySelector('#content-comms .form-select').value,
+            allowed_groups: getCheckedValues('dropdown-comm-groups'),
+            allowed_users: getCheckedValues('dropdown-comm-users')
         };
     }
 
-    if (document.getElementById("chk-extra")?.checked) {
-        const extraCheckboxes = document.querySelectorAll(
-            "#content-extra input[type='checkbox']"
-        );
-
+    if (document.getElementById('chk-extra')?.checked) {
+        const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
         payload.modifications.extra_permissions = {
             manage_drive: !!extraCheckboxes.item(0)?.checked,
             add_friends: !!extraCheckboxes.item(1)?.checked,
@@ -22244,13 +22260,14 @@ async saveAllChanges() {
     this.loading_mark.show();
 
     try {
-        const result = await this.client.subviews.admin.batch_edit_users(payload);
+        const response = await this.client.subviews.admin.batch_edit_users(payload);
 
-        if (!result || !result.success) {
-            throw new Error(result?.error || "保存失败");
+        if (!response || !response.success) {
+            throw new Error(response?.error || '保存失败');
         }
 
         this.closeUserEditor();
+        this.editing_user_ids = [];
         this.selected_user_ids.clear();
         this._update_delete_button();
 
@@ -22259,13 +22276,7 @@ async saveAllChanges() {
         }
         await this.fetch_list();
 
-        MessageMark.report(
-            `成功配置！已修改 ${result.count ?? userIds.length} 个用户。`,
-            null,
-            null,
-            null,
-            MessageMark.colors.blue
-        );
+        MessageMark.report(`成功配置！已修改 ${response.count ?? userIds.length} 个用户。`);
     } catch (error) {
         console.error(error);
         MessageMark.report(error);
@@ -22273,7 +22284,6 @@ async saveAllChanges() {
         this.remove_loading_mark();
     }
 }
-
 // 5. 辅助方法
 setGroupState(groupId, state) {
     const chk = document.getElementById('chk-' + groupId);
