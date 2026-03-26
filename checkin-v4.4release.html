@@ -26981,34 +26981,35 @@ if (textarea) {
             <input type="checkbox" id="chk-comms" onchange="toggleGroupState('comms')"> 
             <span>【通信权限设置】</span>
         </div>
-        <div class="content-box" id="content-comms">
-            <div style="display: flex; align-items: center;">
-                <span class="sub-label-normal">允许主动与所有用户通信<sup class="tooltip-icon" title="启用后用户可与系统内任何用户通信">ⓘ</sup>：</span>
-                <div class="edit-controls">
-                    <select class="form-select" style="width: 100px;">
-                        <option value="inactive" selected>禁用</option>
-                        <option value="active">启用</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div style="display: flex; align-items: center;">
-                <span class="sub-label-normal">允许主动与这些组通信<sup class="tooltip-icon" title="设定该用户只能与指定的组进行通信">ⓘ</sup>：</span>
-                <div class="edit-controls">
-                   <div class="edit-controls">
-    <div class="search-select-container">
-        <input type="text" class="search-select-input" placeholder="搜索允许的组..." onfocus="showDropdown('dropdown-comm-groups')" oninput="filterDropdown('dropdown-comm-groups', this.value)">
-        <div class="search-select-dropdown" id="dropdown-comm-groups"></div>
+       <div class="content-box" id="content-comms">
+    <div style="display: flex; align-items: center;">
+        <span class="sub-label-normal">允许主动与所有用户通信<sup class="tooltip-icon" title="启用后用户可与系统内任何用户通信">ⓘ</sup>：</span>
+        <div class="edit-controls">
+            <select class="form-select" style="width: 100px;">
+                <option value="inactive" selected>禁用</option>
+                <option value="active">启用</option>
+            </select>
+        </div>
     </div>
-</div>
-            
-            <div style="display: flex; align-items: center;">
-                <span class="sub-label-normal">允许主动与这些用户通信<sup class="tooltip-icon" title="设定该用户只能与指定的用户进行通信">ⓘ</sup>：</span>
-                <div class="edit-controls">
-                   <div class="edit-controls">
-    <div class="search-select-container">
-        <input type="text" class="search-select-input" placeholder="搜索允许的用户..." onfocus="showDropdown('dropdown-comm-users')" oninput="filterDropdown('dropdown-comm-users', this.value)">
-        <div class="search-select-dropdown" id="dropdown-comm-users"></div>
+
+    <div style="display: flex; align-items: center;">
+        <span class="sub-label-normal">允许主动与这些组通信<sup class="tooltip-icon" title="设定该用户只能与指定的组进行通信">ⓘ</sup>：</span>
+        <div class="edit-controls">
+            <div class="search-select-container">
+                <input type="text" class="search-select-input" placeholder="搜索允许的组..." onfocus="showDropdown('dropdown-comm-groups')" oninput="filterDropdown('dropdown-comm-groups', this.value)">
+                <div class="search-select-dropdown" id="dropdown-comm-groups"></div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: flex; align-items: center;">
+        <span class="sub-label-normal">允许主动与这些用户通信<sup class="tooltip-icon" title="设定该用户只能与指定的用户进行通信">ⓘ</sup>：</span>
+        <div class="edit-controls">
+            <div class="search-select-container">
+                <input type="text" class="search-select-input" placeholder="搜索允许的用户..." onfocus="showDropdown('dropdown-comm-users')" oninput="filterDropdown('dropdown-comm-users', this.value)">
+                <div class="search-select-dropdown" id="dropdown-comm-users"></div>
+            </div>
+        </div>
     </div>
 </div>
 
