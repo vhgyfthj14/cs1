@@ -21992,7 +21992,10 @@ if (saveBtn && !saveBtn.dataset.boundAdminSave) {
                 async prepareEditorData(uids) {
     if (!uids || uids.length === 0) return;
 
-    const rawUsers = await this.client.subviews.admin.fetch_user_attrs(uids);
+    const [rawUsers, rawGroups] = await Promise.all([
+        this.client.subviews.admin.fetch_user_attrs(uids),
+        this.client.subviews.admin.fetch_group_list()
+    ]);
 
     const normalizedUsers = rawUsers.map(u => ({
         id: u.uid,
@@ -22017,12 +22020,10 @@ if (saveBtn && !saveBtn.dataset.boundAdminSave) {
     normalizedUsers.forEach(u => userMap.set(u.id, u));
     this.users = Array.from(userMap.values());
 
-    const groupSet = new Set();
-    this.users.forEach(u => {
-        (u.join_groups || []).forEach(g => groupSet.add(g));
-        (u.comm_settings?.allowed_groups || []).forEach(g => groupSet.add(g));
-    });
-    this.teams = Array.from(groupSet).map(name => ({ name }));
+    // 关键：分组下拉不要再从“当前选中用户”里提取，要从后台全量分组列表来
+    this.teams = (rawGroups || [])
+        .map(g => ({ name: g.gid || g.name || g }))
+        .filter(t => t.name);
 }
 // 1. 核心触发器
 async advanced_edit_handler() {
@@ -22055,17 +22056,36 @@ renderDropdownData() {
             .filter(Boolean)
     )];
 
-    const myUid =
-        (typeof logged_user !== 'undefined' && (logged_user?.uid || logged_user?.username)) || null;
-
-    // 关键：从当前用户列表树里取全部用户名，而不是从 this.users 里取
     const allUsersFromTree = [...new Set(
         (this.tree1?.tree_items || [])
             .map(item => item?.attr?.columns?.[3]?.text)
             .filter(Boolean)
     )];
 
-    const allUsers = allUsersFromTree.filter(name => name !== myUid);
+    const existing = this.editor_existing_values || {
+        join_groups: [],
+        allowed_groups: [],
+        allowed_users: []
+    };
+
+    const excludeUserSet = new Set(this.editor_excluded_usernames || []);
+
+    // 单人模式：隐藏已经有的；批量模式：不隐藏已有值，只隐藏当前批量目标自己
+    const excludeJoinGroupSet = new Set(
+        this.editor_mode === 'single' ? (existing.join_groups || []) : []
+    );
+    const excludeAllowedGroupSet = new Set(
+        this.editor_mode === 'single' ? (existing.allowed_groups || []) : []
+    );
+    const excludeAllowedUserSet = new Set(
+        this.editor_mode === 'single' ? (existing.allowed_users || []) : []
+    );
+
+    const teamCandidates = allGroups.filter(name => !excludeJoinGroupSet.has(name));
+    const commGroupCandidates = allGroups.filter(name => !excludeAllowedGroupSet.has(name));
+    const commUserCandidates = allUsersFromTree.filter(name =>
+        !excludeUserSet.has(name) && !excludeAllowedUserSet.has(name)
+    );
 
     const generateHtml = (items) => items.map(item => `
         <label class="search-select-item">
@@ -22075,13 +22095,13 @@ renderDropdownData() {
     `).join('');
 
     const dt = document.getElementById('dropdown-teams');
-    if (dt) dt.innerHTML = generateHtml(allGroups);
+    if (dt) dt.innerHTML = generateHtml(teamCandidates);
 
     const dcg = document.getElementById('dropdown-comm-groups');
-    if (dcg) dcg.innerHTML = generateHtml(allGroups);
+    if (dcg) dcg.innerHTML = generateHtml(commGroupCandidates);
 
     const dcu = document.getElementById('dropdown-comm-users');
-    if (dcu) dcu.innerHTML = generateHtml(allUsers);
+    if (dcu) dcu.innerHTML = generateHtml(commUserCandidates);
 }
 
 // 3. 【接入真数据 + 自动回填】：打开面板并填充信息
@@ -22090,7 +22110,37 @@ openUserEditor(mode, usersData) {
     if (!modal) return;
 
     // 关键：固定当前这次弹窗对应的目标用户
-    this.editing_user_ids = Array.isArray(usersData) ? [...usersData] : [usersData];
+this.editing_user_ids = Array.isArray(usersData) ? [...usersData] : [usersData];
+
+// 这几个状态专门给 renderDropdownData / saveAllChanges 用
+this.editor_mode = mode;
+this.editor_existing_values = {
+    join_groups: [],
+    allowed_groups: [],
+    allowed_users: []
+};
+this.editor_excluded_usernames = [];
+
+// 单人编辑：记录当前用户已经有的组、已经允许通信的组/用户
+if (mode === 'single') {
+    const currentUser = (this.users || []).find(u => u.id === usersData);
+    if (currentUser) {
+        this.editor_existing_values.join_groups = [...(currentUser.join_groups || [])];
+        this.editor_existing_values.allowed_groups = [...(currentUser.comm_settings?.allowed_groups || [])];
+        this.editor_existing_values.allowed_users = [...(currentUser.comm_settings?.allowed_users || [])];
+
+        // “避开自己”指的是当前被编辑用户自己
+        if (currentUser.username) {
+            this.editor_excluded_usernames.push(currentUser.username);
+        }
+    }
+} else if (mode === 'batch') {
+    // 批量模式：至少把被编辑的这些用户自己排掉
+    this.editor_excluded_usernames = (this.users || [])
+        .filter(u => usersData.includes(u.id))
+        .map(u => u.username)
+        .filter(Boolean);
+}
 
     // 重新渲染下拉框
     this.renderDropdownData();
@@ -22154,9 +22204,7 @@ openUserEditor(mode, usersData) {
                 const cbs = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`);
                 cbs.forEach(cb => { cb.checked = valuesArray.includes(cb.value); });
             };
-            autoCheckValues('dropdown-teams', user.join_groups);
-            autoCheckValues('dropdown-comm-groups', user.comm_settings?.allowed_groups);
-            autoCheckValues('dropdown-comm-users', user.comm_settings?.allowed_users);
+            
 
             // 附加权限自动恢复
             const extraCbs = document.querySelectorAll('#content-extra input[type="checkbox"]');
@@ -22217,7 +22265,8 @@ async saveAllChanges() {
         target_ids: userIds,
         modifications: {}
     };
-
+    const isSingleEdit = Array.isArray(this.editing_user_ids) && this.editing_user_ids.length === 1;
+const existing = this.editor_existing_values || { join_groups: [], allowed_groups: [], allowed_users: [] };
     const getCheckedValues = (dropdownId) => {
         const checkboxes = document.querySelectorAll(
             `#${dropdownId} input[type="checkbox"]:checked`
@@ -22238,16 +22287,26 @@ async saveAllChanges() {
     }
 
     if (document.getElementById('chk-teams')?.checked) {
-        payload.modifications.join_groups = getCheckedValues('dropdown-teams');
-    }
+    const picked = getCheckedValues('dropdown-teams');
+    payload.modifications.join_groups = isSingleEdit
+        ? [...new Set([...(existing.join_groups || []), ...picked])]
+        : picked;
+}
 
     if (document.getElementById('chk-comms')?.checked) {
-        payload.modifications.comm_settings = {
-            global_comm: document.querySelector('#content-comms .form-select').value,
-            allowed_groups: getCheckedValues('dropdown-comm-groups'),
-            allowed_users: getCheckedValues('dropdown-comm-users')
-        };
-    }
+    const pickedGroups = getCheckedValues('dropdown-comm-groups');
+    const pickedUsers = getCheckedValues('dropdown-comm-users');
+
+    payload.modifications.comm_settings = {
+        global_comm: document.querySelector('#content-comms .form-select').value,
+        allowed_groups: isSingleEdit
+            ? [...new Set([...(existing.allowed_groups || []), ...pickedGroups])]
+            : pickedGroups,
+        allowed_users: isSingleEdit
+            ? [...new Set([...(existing.allowed_users || []), ...pickedUsers])]
+            : pickedUsers
+    };
+}
 
     if (document.getElementById('chk-extra')?.checked) {
         const extraCheckboxes = document.querySelectorAll('#content-extra input[type="checkbox"]');
