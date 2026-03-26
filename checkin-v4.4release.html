@@ -26869,6 +26869,29 @@ if (textarea) {
     .info-section-title { font-size: 15px; font-weight: 600; color: #64748b; margin: 16px 0 10px 0; }
     .batch-user-item { font-size: 15px; font-weight: 600; color: #0f172a; border-bottom: 1px dashed #cbd5e1; padding: 12px 4px; }
     .batch-user-item:last-child { border-bottom: none; }
+    .editor-main-layout {
+    display: flex;
+    gap: 24px;
+    margin-top: 15px;
+    align-items: flex-start;
+}
+
+.editor-left-col {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.editor-right-col {
+    flex: 0 0 320px;
+    width: 320px;
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
 /* 自定义搜索多选下拉框样式 */
 .search-select-container {
     position: relative;
@@ -26937,8 +26960,8 @@ if (textarea) {
             </div>
             <button class="btn-close-modal" onclick="closeUserEditor()">×</button>
         </div>
-        <div style="display: flex; gap: 24px; margin-top: 15px;">
-            <div style="flex: 1.6; display: flex; flex-direction: column; gap: 10px;">
+        <div class="editor-main-layout">
+            <div class="editor-left-col">
     <div style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">⚙️ 用户编辑面板</div>
 
     <div class="edit-group" id="group-status">
@@ -26963,16 +26986,18 @@ if (textarea) {
             <input type="number" class="form-input" value="1024" style="width: 100px;">
             <span style="color: #475569; font-size: 15px;">MB</span>
         </div>
-    </div> <div class="edit-group" id="group-teams">
-        <div class="edit-group-title" id="title-teams">
-            <input type="checkbox" id="chk-teams" onchange="toggleGroupState('teams')"> 
-            <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，选定后加入">ⓘ</sup></span>
+    <div class="edit-group" id="group-teams">
+    <div class="edit-group-title" id="title-teams">
+        <input type="checkbox" id="chk-teams" onchange="toggleGroupState('teams')"> 
+        <span>【所属组管理】<sup class="tooltip-icon" title="下拉菜单显示所有可用的组，直接勾选后保存">ⓘ</sup></span>
+    </div>
+    <div class="content-box" style="margin-top: 0;" id="content-teams">
+        <div class="edit-controls">
+            <div class="search-select-container">
+                <input type="text" class="search-select-input" placeholder="搜索组并勾选..." onfocus="showDropdown('dropdown-teams')" oninput="filterDropdown('dropdown-teams', this.value)">
+                <div class="search-select-dropdown" id="dropdown-teams"></div>
+            </div>
         </div>
-        <div class="content-box" style="margin-top: 0;" id="content-teams">
-           <div class="edit-controls">
-    <div class="search-select-container">
-        <input type="text" class="search-select-input" placeholder="搜索组并勾选..." onfocus="showDropdown('dropdown-teams')" oninput="filterDropdown('dropdown-teams', this.value)">
-        <div class="search-select-dropdown" id="dropdown-teams"></div>
     </div>
 </div>
 
@@ -27035,7 +27060,7 @@ if (textarea) {
     </div>
 </div>
             
-            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+            <div class="editor-right-col">
                 <div id="editor-right-title" style="font-weight: 600; margin-bottom: 4px; color: #1e293b; font-size: 15px;">👤 当前编辑的用户</div>
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 16px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow-y: auto; max-height: 550px;">
                     
